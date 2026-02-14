@@ -6,8 +6,10 @@ use App\Filament\Resources\StudentResource\Pages;
 use App\Filament\Resources\StudentResource\RelationManagers;
 use App\Models\Student;
 use BackedEnum;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -20,21 +22,54 @@ class StudentResource extends Resource
 
     protected static ?string $navigationLabel = 'Students';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Students & Grading';
+
+    protected static ?int $navigationSort = 1;
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('first_name')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('last_name')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('email')
-                    ->required()
-                    ->email()
-                    ->unique(ignoreRecord: true)
-                    ->maxLength(255),
+                Section::make('Personal Information')
+                    ->schema([
+                        Forms\Components\TextInput::make('first_name')
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('last_name')
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('email')
+                            ->required()
+                            ->email()
+                            ->unique(ignoreRecord: true)
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('student_id_number')
+                            ->unique(ignoreRecord: true)
+                            ->nullable(),
+                        Forms\Components\Select::make('gender')
+                            ->options(['Male' => 'Male', 'Female' => 'Female'])
+                            ->nullable(),
+                    ])
+                    ->columns(2),
+
+                Section::make('Academic Details')
+                    ->schema([
+                        Forms\Components\TextInput::make('program')
+                            ->nullable(),
+                        Forms\Components\TextInput::make('year_of_study')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(7)
+                            ->nullable(),
+                        Forms\Components\Select::make('study_mode')
+                            ->options([
+                                'Full-time' => 'Full-time',
+                                'Part-time' => 'Part-time',
+                                'Distance' => 'Distance',
+                            ])
+                            ->nullable(),
+                    ])
+                    ->columns(3),
             ]);
     }
 
@@ -53,6 +88,15 @@ class StudentResource extends Resource
                 Tables\Columns\TextColumn::make('email')
                     ->sortable()
                     ->searchable(),
+                Tables\Columns\TextColumn::make('student_id_number')
+                    ->sortable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('program')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('year_of_study')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('study_mode')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Registered At')
                     ->dateTime(),
@@ -61,11 +105,11 @@ class StudentResource extends Resource
                 // Add any necessary filters
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(), // Optionally allow deletion
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make(),
             ]);
     }
 

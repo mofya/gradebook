@@ -4,18 +4,107 @@ namespace App\Imports;
 
 use App\Models\Student;
 use Maatwebsite\Excel\Concerns\ToModel;
+use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class StudentsImport implements ToModel
+class StudentsImport implements ToModel, WithHeadingRow
 {
+    protected int $imported = 0;
+
+    protected int $skipped = 0;
+
+    /** @var array<string, string> */
+    protected const REQUIRED_COLUMNS = [
+        'email' => 'email',
+        'first_name' => 'first_name',
+        'last_name' => 'last_name',
+    ];
+
+    /** @var array<string, string> */
+    protected const OPTIONAL_COLUMNS = [
+        'student_id' => 'student_id or student_id_number',
+        'gender' => 'gender',
+        'program' => 'program or programme',
+        'year_of_study' => 'year_of_study',
+    ];
+
     /**
-     * @return \Illuminate\Database\Eloquent\Model|null
+     * Validate that the file headers contain the required columns.
+     *
+     * @param  array<int, string>  $headers
+     * @return array{valid: bool, missing: array<int, string>}
      */
-    public function model(array $row)
+    public static function validateHeaders(array $headers): array
     {
-        return new Student([
-            'first_name' => $row[0],
-            'last_name' => $row[1],
-            'email' => $row[2],
-        ]);
+        $headers = array_map(fn ($h) => strtolower(str_replace(' ', '_', trim((string) $h))), $headers);
+
+        $missing = [];
+
+        if (! in_array('email', $headers)) {
+            $missing[] = 'email';
+        }
+
+        if (! in_array('first_name', $headers)) {
+            $missing[] = 'first_name';
+        }
+
+        if (! in_array('last_name', $headers)) {
+            $missing[] = 'last_name';
+        }
+
+        return [
+            'valid' => empty($missing),
+            'missing' => $missing,
+        ];
+    }
+
+    public function model(array $row): ?Student
+    {
+        $studentIdNumber = $row['student_id'] ?? $row['student_id_number'] ?? null;
+        $firstName = $row['first_name'] ?? null;
+        $lastName = $row['last_name'] ?? null;
+        $email = $row['email'] ?? null;
+        $gender = $row['gender'] ?? null;
+        $program = $row['program'] ?? $row['programme'] ?? null;
+        $yearOfStudy = $row['year_of_study'] ?? null;
+
+        if (! $firstName || ! $lastName || ! $email) {
+            $this->skipped++;
+
+            return null;
+        }
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->skipped++;
+
+            return null;
+        }
+
+        if ($yearOfStudy !== null && ! is_numeric($yearOfStudy)) {
+            $yearOfStudy = null;
+        }
+
+        $this->imported++;
+
+        return Student::firstOrCreate(
+            ['email' => $email],
+            [
+                'student_id_number' => $studentIdNumber,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'gender' => $gender,
+                'program' => $program,
+                'year_of_study' => $yearOfStudy ? (int) $yearOfStudy : null,
+            ]
+        );
+    }
+
+    public function getImportedCount(): int
+    {
+        return $this->imported;
+    }
+
+    public function getSkippedCount(): int
+    {
+        return $this->skipped;
     }
 }

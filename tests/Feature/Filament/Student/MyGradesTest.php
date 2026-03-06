@@ -3,6 +3,8 @@
 namespace Tests\Feature\Filament\Student;
 
 use App\Filament\Student\Pages\MyGrades;
+use App\Models\Assessment;
+use App\Models\AssessmentGroup;
 use App\Models\Course;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
@@ -35,10 +37,10 @@ class MyGradesTest extends TestCase
     {
         Livewire::test(MyGrades::class)
             ->assertSuccessful()
-            ->assertSee('Academic Summary');
+            ->assertSee('No enrollments found');
     }
 
-    public function test_my_grades_shows_enrollment_data_when_published(): void
+    public function test_my_grades_shows_enrollment_data(): void
     {
         $year = Year::factory()->create();
         $semester = Semester::factory()->create(['year_id' => $year->id]);
@@ -46,25 +48,22 @@ class MyGradesTest extends TestCase
         $offering = CourseOffering::factory()->create([
             'course_id' => $course->id,
             'semester_id' => $semester->id,
-            'is_published' => true,
         ]);
 
         Enrollment::factory()->create([
             'student_id' => $this->student->id,
             'course_offering_id' => $offering->id,
-            'ca_total' => 35.00,
-            'exam_score' => 60.00,
-            'final_total' => 75.00,
-            'final_grade' => 'B+',
-            'grade_points' => 3.5,
+            'ca_total' => 72.00,
+            'status' => 'enrolled',
         ]);
 
         Livewire::test(MyGrades::class)
             ->assertSee($course->code)
-            ->assertSee('B+');
+            ->assertSee($course->name)
+            ->assertSee('Enrolled');
     }
 
-    public function test_my_grades_hides_grades_when_unpublished(): void
+    public function test_my_grades_shows_ca_total(): void
     {
         $year = Year::factory()->create();
         $semester = Semester::factory()->create(['year_id' => $year->id]);
@@ -72,24 +71,33 @@ class MyGradesTest extends TestCase
         $offering = CourseOffering::factory()->create([
             'course_id' => $course->id,
             'semester_id' => $semester->id,
-            'is_published' => false,
+            'ca_weight' => 40,
+        ]);
+
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+        ]);
+
+        Assessment::factory()->create([
+            'course_id' => $course->id,
+            'assessment_group_id' => $group->id,
+            'name' => 'Quiz 1',
+            'max_raw_score' => 100,
         ]);
 
         Enrollment::factory()->create([
             'student_id' => $this->student->id,
             'course_offering_id' => $offering->id,
-            'final_total' => 75.00,
-            'final_grade' => 'B+',
-            'grade_points' => 3.5,
+            'ca_total' => 80.00,
         ]);
 
         Livewire::test(MyGrades::class)
-            ->assertSee($course->code)
-            ->assertSee('Grades not yet published')
-            ->assertDontSee('B+');
+            ->assertSee('CA Total')
+            ->assertSee('32.0'); // 80 * 40/100 = 32.0
     }
 
-    public function test_my_grades_shows_cgpa(): void
+    public function test_my_grades_shows_no_assessments_message(): void
     {
         $year = Year::factory()->create();
         $semester = Semester::factory()->create(['year_id' => $year->id]);
@@ -97,18 +105,15 @@ class MyGradesTest extends TestCase
         $offering = CourseOffering::factory()->create([
             'course_id' => $course->id,
             'semester_id' => $semester->id,
-            'is_published' => true,
         ]);
 
         Enrollment::factory()->create([
             'student_id' => $this->student->id,
             'course_offering_id' => $offering->id,
-            'final_total' => 85.00,
-            'final_grade' => 'A',
         ]);
 
         Livewire::test(MyGrades::class)
-            ->assertSee('CGPA');
+            ->assertSee('No assessments set up yet');
     }
 
     public function test_my_grades_shows_no_student_message_for_unknown_user(): void

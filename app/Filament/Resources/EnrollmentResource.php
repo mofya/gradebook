@@ -119,6 +119,7 @@ class EnrollmentResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with(['student', 'courseOffering.course', 'courseOffering.semester']))
             ->columns([
                 Tables\Columns\TextColumn::make('student.email')
                     ->sortable()

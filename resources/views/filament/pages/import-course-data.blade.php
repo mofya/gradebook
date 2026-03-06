@@ -48,6 +48,31 @@
 
         {{-- Step 3: Column mapping --}}
         @if($currentStep === 3)
+            @php
+                // R1: Check if all required identity columns are mapped
+                $mappedRoles = collect($columnMappings)->pluck('confirmed_role');
+                $hasStudentId = $mappedRoles->contains('student_id');
+                $hasName = $mappedRoles->contains('full_name') || ($mappedRoles->contains('first_name') && $mappedRoles->contains('last_name'));
+                $hasEmail = $mappedRoles->contains('email');
+                $allIdentityMapped = $hasStudentId && $hasName && $hasEmail;
+
+                // R2: Detect duplicate headers
+                $headerGroups = [];
+                foreach ($columnMappings as $idx => $m) {
+                    $h = $m['header'] ?? '';
+                    if ($h !== '') {
+                        $headerGroups[$h][] = $idx;
+                    }
+                }
+                $duplicateInfo = [];
+                foreach ($headerGroups as $header => $indices) {
+                    if (count($indices) > 1) {
+                        foreach ($indices as $pos => $idx) {
+                            $duplicateInfo[$idx] = ['num' => $pos + 1, 'total' => count($indices)];
+                        }
+                    }
+                }
+            @endphp
             <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
                 <div class="p-5 pb-0">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Column Mapping</h3>
@@ -59,7 +84,17 @@
                         <p><span class="font-semibold">Assigned Role:</span> what will actually be used during import.</p>
                         <p><span class="font-semibold">Max Score:</span> parsed denominator from headers like <code>Quiz 1 (30)</code> or <code>Exam/60</code>.</p>
                         <p><span class="font-semibold">Sample Values:</span> first few data values from that column.</p>
-                        <p class="mt-1 font-medium text-amber-700 dark:text-amber-300">Required student identity columns: Student ID, First Name, Last Name, and Email.</p>
+                        @if($allIdentityMapped)
+                            <p class="mt-1 font-medium text-green-700 dark:text-green-300">All required identity columns are mapped.</p>
+                        @else
+                            @php
+                                $missing = [];
+                                if (!$hasStudentId) $missing[] = 'Student ID';
+                                if (!$hasName) $missing[] = 'Name (Full Name or First + Last Name)';
+                                if (!$hasEmail) $missing[] = 'Email';
+                            @endphp
+                            <p class="mt-1 font-medium text-amber-700 dark:text-amber-300">Missing required columns: {{ implode(', ', $missing) }}.</p>
+                        @endif
                     </div>
                 </div>
 
@@ -77,7 +112,19 @@
                         <tbody>
                             @foreach($columnMappings as $i => $mapping)
                                 <tr class="border-b border-gray-200 dark:border-gray-700 {{ $mapping['confirmed_role'] === 'skip' ? 'opacity-50' : '' }}">
-                                    <td class="px-4 py-3 font-medium text-gray-800 dark:text-white/90">{{ $mapping['header'] ?: '(empty)' }}</td>
+                                    <td class="px-4 py-3 font-medium text-gray-800 dark:text-white/90">
+                                        {{ $mapping['header'] ?: '(empty)' }}
+                                        @if(isset($duplicateInfo[$i]))
+                                            <span class="ml-1 inline-flex rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-500/10 dark:text-orange-400">
+                                                Dup {{ $duplicateInfo[$i]['num'] }}/{{ $duplicateInfo[$i]['total'] }}
+                                            </span>
+                                        @endif
+                                        @if($mapping['is_formula'] ?? false)
+                                            <span class="ml-1 inline-flex rounded-full bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400">
+                                                Formula
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 text-gray-500 dark:text-gray-400">
                                         <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
                                             {{ $mapping['detected_role'] === 'skip' ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' : '' }}

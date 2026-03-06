@@ -12,6 +12,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MyTranscript extends Page
 {
+    protected static bool $shouldRegisterNavigation = false;
+
     protected string $view = 'filament.student.pages.my-transcript';
 
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
@@ -75,7 +77,7 @@ class MyTranscript extends Page
 
         $service = app(TranscriptService::class);
         $data = $service->generateTranscriptData($student);
-        $filename = 'transcript_'.$student->id.'_'.now()->format('Ymd').'.pdf';
+        $filename = 'transcript_'.$student->student_id_number.'_'.now()->format('Ymd').'.pdf';
 
         return response()->streamDownload(function () use ($data) {
             echo \Barryvdh\DomPDF\Facade\Pdf::loadView('transcripts.pdf', $data)->output();

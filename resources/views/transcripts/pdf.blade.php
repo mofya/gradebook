@@ -101,7 +101,7 @@
     <div class="student-info">
         <p><strong>Student Name:</strong> {{ $student->first_name }} {{ $student->last_name }}</p>
         <p><strong>Email:</strong> {{ $student->email }}</p>
-        <p><strong>Student ID:</strong> {{ $student->id }}</p>
+        <p><strong>Student ID:</strong> {{ $student->student_id_number }}</p>
         <p><strong>Date Issued:</strong> {{ $generated_at }}</p>
     </div>
 

@@ -12,9 +12,9 @@ class MyGrades extends Page
 {
     protected string $view = 'filament.student.pages.my-grades';
 
-    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-academic-cap';
+    protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
-    protected static ?string $title = 'My Grades';
+    protected static ?string $title = 'My CA Results';
 
     protected static ?int $navigationSort = 1;
 
@@ -28,7 +28,7 @@ class MyGrades extends Page
             ->first();
 
         if (! $student) {
-            return ['enrollments' => collect(), 'student' => null, 'cgpa' => 0.0, 'semesterGpas' => []];
+            return ['courses' => collect(), 'student' => null];
         }
 
         $enrollments = Enrollment::query()
@@ -36,47 +36,79 @@ class MyGrades extends Page
             ->with([
                 'courseOffering.course',
                 'courseOffering.semester.year',
-                'courseOffering.assessmentGroups.assessments',
+                'courseOffering.assessmentGroups.assessments.subsections',
+                'courseOffering.gradingScheme.levels',
                 'gradeResults.assessment',
+                'gradeResults.subsectionScores.assessmentSubsection',
             ])
             ->get();
 
-        $completedResults = $enrollments
-            ->filter(fn ($e) => $e->final_total !== null && $e->courseOffering->is_published)
-            ->map(fn ($e) => [
-                'mark' => (float) $e->final_total,
-                'credits' => $e->courseOffering->course->credits,
-            ])
-            ->values()
-            ->toArray();
+        $courses = $enrollments->map(function (Enrollment $enrollment) use ($gradingService) {
+            $offering = $enrollment->courseOffering;
+            $caWeight = (float) ($offering->ca_weight ?? 50);
+            $scheme = $offering->gradingScheme;
 
-        $cgpa = $gradingService->calculateCumulativeGpa($completedResults);
+            // CA total is on a 0-100 scale
+            $caTotal = $enrollment->ca_total !== null ? (float) $enrollment->ca_total : null;
 
-        // Calculate semester GPAs
-        $semesterGpas = [];
-        $grouped = $enrollments->groupBy(fn ($e) => $e->courseOffering->semester_id);
-        foreach ($grouped as $semesterId => $semesterEnrollments) {
-            $semesterResults = $semesterEnrollments
-                ->filter(fn ($e) => $e->final_total !== null && $e->courseOffering->is_published)
-                ->map(fn ($e) => [
-                    'mark' => (float) $e->final_total,
-                    'credits' => $e->courseOffering->course->credits,
-                ])
-                ->values()
-                ->toArray();
+            // Weighted CA = ca_total * ca_weight / 100 (e.g., 80 * 40/100 = 32 out of 40)
+            $weightedCa = $caTotal !== null ? round($caTotal * $caWeight / 100, 1) : null;
 
-            $semester = $semesterEnrollments->first()->courseOffering->semester;
-            $semesterGpas[$semesterId] = [
-                'name' => ($semester->year->name ?? '').' '.$semester->name,
-                'gpa' => $gradingService->calculateSemesterGpa($semesterResults),
+            // CA grade from the 0-100 percentage
+            $caGrade = $caTotal !== null
+                ? $gradingService->getLetterGradeFromScheme($caTotal, $scheme)
+                : null;
+
+            // Get only CA assessments (filter by CA groups)
+            $caAssessments = $offering->assessmentGroups
+                ->where('type', 'ca')
+                ->flatMap(fn ($group) => $group->assessments)
+                ->sortBy('sort_order');
+
+            $gradeResultsByAssessment = $enrollment->gradeResults->keyBy('assessment_id');
+
+            $assessmentRows = $caAssessments->map(function ($assessment) use ($gradeResultsByAssessment) {
+                $result = $gradeResultsByAssessment->get($assessment->id);
+
+                $subsections = [];
+                if ($assessment->has_subsections && $result) {
+                    $subsections = $result->subsectionScores->map(fn ($ss) => [
+                        'name' => $ss->assessmentSubsection->name ?? 'Unknown',
+                        'score' => (float) $ss->score,
+                        'max_score' => (float) ($ss->assessmentSubsection->max_score ?? 100),
+                    ])->values()->all();
+                }
+
+                return [
+                    'name' => $assessment->name,
+                    'max_score' => (float) $assessment->max_raw_score,
+                    'raw_score' => $result?->raw_score !== null ? (float) $result->raw_score : null,
+                    'is_excused' => $result?->is_excused ?? false,
+                    'has_subsections' => $assessment->has_subsections && count($subsections) > 0,
+                    'subsections' => $subsections,
+                    'student_feedback' => $result?->student_feedback,
+                ];
+            })->values();
+
+            $semester = $offering->semester;
+            $semesterLabel = ($semester->year->name ?? '').' '.$semester->name;
+
+            return [
+                'course_code' => $offering->course->code,
+                'course_name' => $offering->course->name,
+                'semester' => $semesterLabel,
+                'status' => $enrollment->status,
+                'ca_weight' => $caWeight,
+                'ca_total' => $caTotal,
+                'weighted_ca' => $weightedCa,
+                'ca_grade' => $caGrade,
+                'assessments' => $assessmentRows,
             ];
-        }
+        });
 
         return [
             'student' => $student,
-            'enrollments' => $enrollments,
-            'cgpa' => $cgpa,
-            'semesterGpas' => $semesterGpas,
+            'courses' => $courses,
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Enrollment;
 use App\Models\Student;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
@@ -13,30 +14,40 @@ class TranscriptService
     ) {}
 
     /**
-     * Generate transcript data for a student.
+     * Generate transcript data for a student using the enrollment-based data model.
      *
      * @return array<string, mixed>
      */
     public function generateTranscriptData(Student $student): array
     {
-        $student->load(['courses.department', 'grades.assessment', 'grades.course']);
+        $enrollments = Enrollment::query()
+            ->where('student_id', $student->id)
+            ->whereHas('courseOffering', fn ($q) => $q->where('is_published', true))
+            ->whereNotNull('final_total')
+            ->with(['courseOffering.course', 'courseOffering.semester.year'])
+            ->get();
 
         $courseResults = [];
+        $gpaInput = [];
 
-        foreach ($student->courses as $course) {
-            $totalMark = $student->totalGradeForCourse($course->id);
+        foreach ($enrollments as $enrollment) {
+            $course = $enrollment->courseOffering->course;
             $courseResults[] = [
                 'course_code' => $course->code,
                 'course_name' => $course->name,
                 'credits' => $course->credits,
-                'mark' => $totalMark !== null ? round($totalMark, 2) : null,
-                'letter_grade' => $totalMark !== null ? $this->gradingService->getLetterGrade($totalMark) : null,
-                'grade_points' => $totalMark !== null ? $this->gradingService->getGradePoints($totalMark) : null,
+                'mark' => (float) $enrollment->final_total,
+                'letter_grade' => $enrollment->final_grade,
+                'grade_points' => $enrollment->grade_points !== null ? (float) $enrollment->grade_points : null,
             ];
-        }
 
-        $gradedResults = array_filter($courseResults, fn ($r) => $r['mark'] !== null);
-        $gpaInput = array_map(fn ($r) => ['mark' => $r['mark'], 'credits' => $r['credits']], $gradedResults);
+            if ($enrollment->final_grade !== null && ! in_array($enrollment->final_grade, ['NE', 'DV', 'EX', 'ABS', 'WH'], true)) {
+                $gpaInput[] = [
+                    'mark' => (float) $enrollment->final_total,
+                    'credits' => $course->credits,
+                ];
+            }
+        }
 
         return [
             'student' => $student,
@@ -55,7 +66,7 @@ class TranscriptService
 
         $pdf = Pdf::loadView('transcripts.pdf', $data);
 
-        $filename = 'transcript_'.$student->id.'_'.now()->format('Ymd').'.pdf';
+        $filename = 'transcript_'.$student->student_id_number.'_'.now()->format('Ymd').'.pdf';
 
         return $pdf->download($filename);
     }
@@ -69,7 +80,7 @@ class TranscriptService
 
         $pdf = Pdf::loadView('transcripts.pdf', $data);
 
-        $filename = 'transcript_'.$student->id.'_'.now()->format('Ymd').'.pdf';
+        $filename = 'transcript_'.$student->student_id_number.'_'.now()->format('Ymd').'.pdf';
 
         return $pdf->stream($filename);
     }

@@ -25,3 +25,11 @@ yarn-error.log
 /.junie
 .mcp.json
 .DS_Store
+storage/app/private/test_export_*.xlsx
+*.png
+tests/browser-screenshots/
+tests/browser-test.cjs
+.playwright-mcp/
+public/css/filament/
+public/js/filament/
+public/fonts/filament/

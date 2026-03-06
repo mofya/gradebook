@@ -66,7 +66,7 @@ class GradingScheme extends Model
         $precision = $this->rounding_precision ?? $this->decimal_places ?? 0;
         $mark = round($mark, $precision);
 
-        foreach ($this->levels as $level) {
+        foreach ($this->levels->sortByDesc('min_mark') as $level) {
             if ($mark >= $level->min_mark && $mark <= $level->max_mark) {
                 return (float) $level->grade_points;
             }

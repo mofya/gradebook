@@ -18,9 +18,11 @@ class GradeQueryResource extends Resource
 {
     protected static ?string $model = GradeQuery::class;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-question-mark-circle';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chat-bubble-left-ellipsis';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Grade Queries';
+    protected static string|\UnitEnum|null $navigationGroup = 'Students & Grading';
+
+    protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
     {

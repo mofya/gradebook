@@ -8,6 +8,7 @@ use App\Services\CourseDataImportService;
 use BackedEnum;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
@@ -99,6 +100,25 @@ class ImportCourseData extends Page
                         ? 'This workbook has multiple worksheets. Select the worksheet to import.'
                         : null)
                     ->visible(fn (): bool => $this->currentStep <= 2 && filled($this->data['file'] ?? null) && count($this->availableSheets) > 0),
+
+                TextInput::make('defaultProgram')
+                    ->label('Default Program')
+                    ->helperText('Applied to new students when the Excel file has no Program column.')
+                    ->visible(fn () => $this->currentStep <= 2 && filled($this->data['courseOfferingId'] ?? null)),
+
+                Select::make('defaultYearOfStudy')
+                    ->label('Default Year of Study')
+                    ->options([
+                        1 => '1st Year',
+                        2 => '2nd Year',
+                        3 => '3rd Year',
+                        4 => '4th Year',
+                        5 => '5th Year',
+                        6 => '6th Year',
+                        7 => '7th Year',
+                    ])
+                    ->helperText('Applied to new students when the Excel file has no Year of Study column.')
+                    ->visible(fn () => $this->currentStep <= 2 && filled($this->data['courseOfferingId'] ?? null)),
             ]);
     }
 
@@ -269,6 +289,29 @@ class ImportCourseData extends Page
         $service = app(CourseDataImportService::class);
         $this->columnMappings = $service->parseHeaders($headers);
 
+        // Detect formula columns and auto-skip them
+        $formulaColumns = $service->detectFormulaColumns($filePath, $selectedSheet, count($headers));
+        $formulaSkipped = 0;
+
+        foreach ($this->columnMappings as &$mapping) {
+            if (in_array($mapping['index'], $formulaColumns, true)) {
+                $mapping['is_formula'] = true;
+
+                if (in_array($mapping['confirmed_role'], ['ca_assessment', 'exam_score'])) {
+                    $mapping['confirmed_role'] = 'skip';
+                    $formulaSkipped++;
+                }
+            }
+        }
+        unset($mapping);
+
+        if ($formulaSkipped > 0) {
+            Notification::make()
+                ->title($formulaSkipped.' formula-based column(s) auto-skipped (computed values detected).')
+                ->info()
+                ->send();
+        }
+
         $validation = $service->validateColumnMappings($this->columnMappings);
 
         if (! $validation['valid']) {
@@ -338,6 +381,28 @@ class ImportCourseData extends Page
             }
         }
 
+        // Build mapping from skipped formula columns: header → formula weight
+        // This allows transferring weights from normalized (skipped) columns to their raw counterparts
+        $skippedFormulaWeights = [];
+        if ($detectedWeights) {
+            foreach ($this->columnMappings as $mapping) {
+                if ($mapping['confirmed_role'] !== 'skip') {
+                    continue;
+                }
+
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($mapping['index'] + 1);
+                $weight = $detectedWeights[$colLetter] ?? null;
+
+                if ($weight !== null) {
+                    $headerKey = strtolower(trim($mapping['header']));
+
+                    if (! isset($skippedFormulaWeights[$headerKey])) {
+                        $skippedFormulaWeights[$headerKey] = $weight;
+                    }
+                }
+            }
+        }
+
         $this->weightConfig = [];
         $sumMaxScores = $caColumns->sum('max_score') ?: $caColumns->count();
 
@@ -347,25 +412,43 @@ class ImportCourseData extends Page
                 ? round(($maxScore / $sumMaxScores) * 100, 2)
                 : round(100 / $caColumns->count(), 2);
 
-            // Try to match detected formula weight to this column
+            // Try direct column match in CA formula
             $formulaWeight = null;
             if ($detectedWeights) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col['index'] + 1);
                 $formulaWeight = $detectedWeights[$colLetter] ?? null;
-                if ($formulaWeight !== null) {
-                    // Formula weights are typically decimal multipliers (e.g. 0.025 = 2.5%)
-                    $formulaWeight = round($formulaWeight * 100, 2);
-                }
             }
+
+            // If no direct match, try sibling match (skipped column with same header)
+            if ($formulaWeight === null && ! empty($skippedFormulaWeights)) {
+                $headerKey = strtolower(trim($col['assessment_name'] ?? $col['header']));
+                $formulaWeight = $skippedFormulaWeights[$headerKey] ?? null;
+            }
+
+            $formulaWeightPct = $formulaWeight !== null
+                ? round($formulaWeight * 100, 2)
+                : null;
 
             $this->weightConfig[] = [
                 'column_index' => $col['index'],
                 'header' => $col['assessment_name'] ?? $col['header'],
                 'max_score' => $maxScore,
-                'detected_weight' => $formulaWeight,
-                'ca_points' => $defaultWeight,
+                'detected_weight' => $formulaWeightPct,
+                'ca_points' => $formulaWeightPct ?? $defaultWeight,
                 'override_weight' => null,
             ];
+        }
+
+        // Apply detected formula weights to column mappings as ca_weight
+        foreach ($this->weightConfig as $wc) {
+            if ($wc['detected_weight'] !== null) {
+                foreach ($this->columnMappings as &$mapping) {
+                    if ($mapping['index'] === $wc['column_index'] && $mapping['confirmed_role'] === 'ca_assessment') {
+                        $mapping['ca_weight'] = $wc['detected_weight'];
+                    }
+                }
+                unset($mapping);
+            }
         }
 
         $this->currentStep = 4;
@@ -445,13 +528,13 @@ class ImportCourseData extends Page
             return;
         }
 
-        // Apply weight overrides to column mappings
+        // Apply weight overrides to column mappings as ca_weight (separate from max_score)
         foreach ($this->weightConfig as $wc) {
             $overrideWeight = $wc['override_weight'] ?? null;
             if ($overrideWeight !== null && $overrideWeight !== '') {
                 foreach ($this->columnMappings as &$mapping) {
                     if ($mapping['index'] === $wc['column_index'] && $mapping['confirmed_role'] === 'ca_assessment') {
-                        $mapping['max_score'] = (float) $overrideWeight;
+                        $mapping['ca_weight'] = (float) $overrideWeight;
                     }
                 }
                 unset($mapping);
@@ -517,7 +600,13 @@ class ImportCourseData extends Page
 
         $this->preflightInfo = $preflight['info'] ?? [];
 
-        $this->importResults = $service->import($courseOffering, $rows, $this->columnMappings);
+        $this->importResults = $service->import(
+            $courseOffering,
+            $rows,
+            $this->columnMappings,
+            $this->data['defaultProgram'] ?? null,
+            $this->data['defaultYearOfStudy'] ?? null,
+        );
         $this->currentStep = 5;
 
         Notification::make()
@@ -592,6 +681,7 @@ class ImportCourseData extends Page
             'email' => 'Email',
             'gender' => 'Gender',
             'program' => 'Program',
+            'year_of_study' => 'Year of Study',
             'ca_assessment' => 'CA Assessment',
             'exam_score' => 'Exam Score',
         ];

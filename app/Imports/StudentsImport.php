@@ -57,6 +57,9 @@ class StudentsImport implements ToModel, WithHeadingRow
         ];
     }
 
+    /** @var array<string, bool> */
+    protected array $seenGithubUsernames = [];
+
     public function model(array $row): ?Student
     {
         $studentIdNumber = $row['student_id'] ?? $row['student_id_number'] ?? null;
@@ -66,6 +69,7 @@ class StudentsImport implements ToModel, WithHeadingRow
         $gender = $row['gender'] ?? null;
         $program = $row['program'] ?? $row['programme'] ?? null;
         $yearOfStudy = $row['year_of_study'] ?? null;
+        $githubUsername = $row['github_username'] ?? null;
 
         if (! $firstName || ! $lastName || ! $email) {
             $this->skipped++;
@@ -83,18 +87,37 @@ class StudentsImport implements ToModel, WithHeadingRow
             $yearOfStudy = null;
         }
 
+        // Deduplicate github usernames — skip if empty or already seen/taken
+        $resolvedGithub = null;
+        if ($githubUsername && trim($githubUsername) !== '') {
+            $trimmed = trim($githubUsername);
+            $lower = strtolower($trimmed);
+
+            if (isset($this->seenGithubUsernames[$lower])) {
+                $resolvedGithub = null;
+            } elseif (Student::where('github_username', $trimmed)->where('email', '!=', $email)->exists()) {
+                $resolvedGithub = null;
+            } else {
+                $resolvedGithub = $trimmed;
+                $this->seenGithubUsernames[$lower] = true;
+            }
+        }
+
+        $attributes = array_filter([
+            'student_id_number' => $studentIdNumber,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'gender' => $gender,
+            'program' => $program,
+            'year_of_study' => $yearOfStudy ? (int) $yearOfStudy : null,
+            'github_username' => $resolvedGithub,
+        ], fn ($value) => $value !== null);
+
         $this->imported++;
 
-        return Student::firstOrCreate(
+        return Student::updateOrCreate(
             ['email' => $email],
-            [
-                'student_id_number' => $studentIdNumber,
-                'first_name' => $firstName,
-                'last_name' => $lastName,
-                'gender' => $gender,
-                'program' => $program,
-                'year_of_study' => $yearOfStudy ? (int) $yearOfStudy : null,
-            ]
+            $attributes,
         );
     }
 

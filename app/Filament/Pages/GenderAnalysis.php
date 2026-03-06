@@ -11,7 +11,7 @@ use Filament\Schemas\Schema;
 
 class GenderAnalysis extends Page
 {
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-scale';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Reports';
 

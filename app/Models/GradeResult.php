@@ -21,6 +21,7 @@ class GradeResult extends Model
         'normalized_score',
         'is_excused',
         'notes',
+        'student_feedback',
         'source',
     ];
 

@@ -39,7 +39,7 @@ class ImportStudents extends Page
             ->schema([
                 Forms\Components\FileUpload::make('file')
                     ->label('Student Excel File')
-                    ->helperText('Required columns: student_id, first_name, last_name, email. Optional: gender, program, year_of_study')
+                    ->helperText('Required columns: first_name, last_name, email. Optional: student_id, gender, program, year_of_study, github_username')
                     ->required()
                     ->disk('local')
                     ->directory('student-imports')
@@ -83,7 +83,7 @@ class ImportStudents extends Page
 
             Notification::make()
                 ->title('Missing required columns: '.$missing)
-                ->body('Expected columns: student_id, first_name, last_name, email, gender, program, year_of_study. Download the template for the correct format.')
+                ->body('Expected columns: first_name, last_name, email (required); student_id, gender, program, year_of_study, github_username (optional). Download the template for the correct format.')
                 ->danger()
                 ->persistent()
                 ->send();

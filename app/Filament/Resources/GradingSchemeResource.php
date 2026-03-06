@@ -18,7 +18,7 @@ class GradingSchemeResource extends Resource
 {
     protected static ?string $model = GradingScheme::class;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-vertical';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Academic Setup';
 

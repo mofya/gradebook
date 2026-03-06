@@ -253,7 +253,7 @@ class CourseDataImportService
      * @param  array<int, array{index: int, header: string, detected_role: string, confirmed_role: string, assessment_name: string|null, max_score: float|null}>  $columnMappings
      * @return array{students_created: int, students_found: int, enrollments_created: int, assessments_created: int, grades_imported: int, exam_scores_set: int, grades_resolved: int, errors: array<int, string>}
      */
-    public function import(CourseOffering $courseOffering, array $rows, array $columnMappings): array
+    public function import(CourseOffering $courseOffering, array $rows, array $columnMappings, ?string $defaultProgram = null, ?int $defaultYearOfStudy = null): array
     {
         $results = [
             'students_created' => 0,
@@ -266,7 +266,7 @@ class CourseDataImportService
             'errors' => [],
         ];
 
-        return DB::transaction(function () use ($courseOffering, $rows, $columnMappings, &$results) {
+        return DB::transaction(function () use ($courseOffering, $rows, $columnMappings, $defaultProgram, $defaultYearOfStudy, &$results) {
             // Phase 1 — Assessment structure
             $caColumns = collect($columnMappings)->where('confirmed_role', 'ca_assessment');
             $examColumn = collect($columnMappings)->firstWhere('confirmed_role', 'exam_score');
@@ -286,13 +286,31 @@ class CourseDataImportService
                     ]
                 );
 
+                // Infer max_score from data for columns where header didn't provide it
+                $columnMappings = $this->inferMaxScores($rows, $columnMappings);
+                $caColumns = collect($columnMappings)->where('confirmed_role', 'ca_assessment');
+
                 $sumMaxScores = $caColumns->sum('max_score') ?: $caColumns->count();
+                $hasExplicitWeights = $caColumns->contains(fn ($c) => isset($c['ca_weight']));
+
+                // Scale formula weights to sum to 100 (GradingService expects CA total on 0-100 scale)
+                $weightSum = $hasExplicitWeights
+                    ? $caColumns->filter(fn ($c) => isset($c['ca_weight']))->sum('ca_weight')
+                    : 0;
+                $weightScale = ($hasExplicitWeights && $weightSum > 0) ? 100 / $weightSum : 1;
 
                 foreach ($caColumns as $sortIndex => $col) {
-                    $maxScore = $col['max_score'] ?? 1;
-                    $normalizedTo = $sumMaxScores > 0
-                        ? round(($maxScore / $sumMaxScores) * 100, 2)
-                        : round(100 / $caColumns->count(), 2);
+                    $maxScore = $col['max_score'] ?? 100;
+
+                    if ($hasExplicitWeights && isset($col['ca_weight'])) {
+                        // Scale formula-detected weight so CA total sums to 100
+                        $normalizedTo = round((float) $col['ca_weight'] * $weightScale, 2);
+                    } else {
+                        // Fall back to proportional weight from max scores
+                        $normalizedTo = $sumMaxScores > 0
+                            ? round(($maxScore / $sumMaxScores) * 100, 2)
+                            : round(100 / $caColumns->count(), 2);
+                    }
 
                     $assessment = Assessment::firstOrCreate(
                         [
@@ -321,6 +339,7 @@ class CourseDataImportService
             $emailColumn = collect($columnMappings)->firstWhere('confirmed_role', 'email');
             $genderColumn = collect($columnMappings)->firstWhere('confirmed_role', 'gender');
             $programColumn = collect($columnMappings)->firstWhere('confirmed_role', 'program');
+            $yearOfStudyColumn = collect($columnMappings)->firstWhere('confirmed_role', 'year_of_study');
 
             foreach ($rows as $rowIndex => $row) {
                 $studentIdValue = $studentIdColumn ? trim((string) ($row[$studentIdColumn['index']] ?? '')) : '';
@@ -349,6 +368,15 @@ class CourseDataImportService
                 $email = $emailColumn ? trim((string) ($row[$emailColumn['index']] ?? '')) : '';
                 $gender = $genderColumn ? trim((string) ($row[$genderColumn['index']] ?? '')) : null;
                 $program = $programColumn ? trim((string) ($row[$programColumn['index']] ?? '')) : null;
+                $yearOfStudy = $yearOfStudyColumn ? trim((string) ($row[$yearOfStudyColumn['index']] ?? '')) : null;
+
+                // Apply defaults when no column value is available
+                if (blank($program) && $defaultProgram !== null) {
+                    $program = $defaultProgram;
+                }
+                if (blank($yearOfStudy) && $defaultYearOfStudy !== null) {
+                    $yearOfStudy = (string) $defaultYearOfStudy;
+                }
 
                 $student = Student::where('student_id_number', $studentIdValue)->first();
 
@@ -371,6 +399,7 @@ class CourseDataImportService
                         'email' => $resolvedEmail,
                         'gender' => $gender,
                         'program' => $program,
+                        'year_of_study' => is_numeric($yearOfStudy) ? (int) $yearOfStudy : null,
                     ]);
                     $results['students_created']++;
                 }
@@ -508,6 +537,11 @@ class CourseDataImportService
      */
     protected function detectRole(string $lowerHeader, string $originalHeader): string
     {
+        // Skip: formula artifacts leaked into headers (e.g. "=_xlfn.CONCAT(...)")
+        if (str_starts_with(trim($originalHeader), '=')) {
+            return 'skip';
+        }
+
         // Skip: row numbering
         if (preg_match('/^(no\.?|#|s\/n|s\.?n\.?)$/i', $lowerHeader)) {
             return 'skip';
@@ -547,8 +581,13 @@ class CourseDataImportService
             return 'program';
         }
 
+        // Year of study
+        if (preg_match('/^(year.?of.?study|study.?year|year|level)$/i', $lowerHeader)) {
+            return 'year_of_study';
+        }
+
         // Computed/aggregate columns to skip
-        if (preg_match('/^(ca\s*[\/(]\s*\d+|ca\s*grade|ca\s*total|course\s*total|course\s*grade|exam\s*grade|final\s*mark|final\s*grade|grade|gp|grade\s*point|total|remark|class|result|check(\s*digit)?|def(erred)?|sup(plementary)?|rank|position|pass|fail|status|average|mean|cumulative|credits|points)$/i', $lowerHeader)) {
+        if (preg_match('/^(ca\s*[\/(]\s*\d+\)?|ca\s*grade|ca\s*total|course\s*total|course\s*grade|exam\s*grade|final\s*mark|final\s*grade|grade|gp|grade\s*point|total|remark|comment|note|class|result|check(\s*digit)?|def(erred)?|sup(plementary)?|rank|position|pass|fail|status|average|mean|cumulative|credits|points)$/i', $lowerHeader)) {
             return 'skip';
         }
 
@@ -601,6 +640,56 @@ class CourseDataImportService
     }
 
     /**
+     * Infer max_score from data for CA columns where header didn't provide one.
+     * Scans column values and rounds the max up to a standard denominator (10, 20, 25, 50, 100).
+     *
+     * @param  array<int, array<int, mixed>>  $rows
+     * @param  array<int, array{index: int, header: string, detected_role: string, confirmed_role: string, assessment_name: string|null, max_score: float|null}>  $columnMappings
+     * @return array<int, array{index: int, header: string, detected_role: string, confirmed_role: string, assessment_name: string|null, max_score: float|null}>
+     */
+    protected function inferMaxScores(array $rows, array $columnMappings): array
+    {
+        $standardDenominators = [10, 20, 25, 50, 100];
+
+        foreach ($columnMappings as &$mapping) {
+            if ($mapping['confirmed_role'] !== 'ca_assessment' || $mapping['max_score'] !== null) {
+                continue;
+            }
+
+            $maxValue = 0;
+
+            foreach ($rows as $row) {
+                $value = $row[$mapping['index']] ?? null;
+
+                if ($value !== null && is_numeric($value)) {
+                    $maxValue = max($maxValue, (float) $value);
+                }
+            }
+
+            if ($maxValue <= 0) {
+                $mapping['max_score'] = 100;
+
+                continue;
+            }
+
+            // Round up to the nearest standard denominator
+            $inferred = 100;
+            foreach ($standardDenominators as $denom) {
+                if ($maxValue <= $denom) {
+                    $inferred = $denom;
+
+                    break;
+                }
+            }
+
+            $mapping['max_score'] = (float) $inferred;
+        }
+        unset($mapping);
+
+        return $columnMappings;
+    }
+
+    /**
      * Parse exam header to extract denominator, e.g. "Exam/60" → 60, "Exam (100)" → 100.
      */
     protected function parseExamDenominator(string $header): ?float
@@ -610,6 +699,53 @@ class CourseDataImportService
         }
 
         return null;
+    }
+
+    /**
+     * Detect which columns contain formulas in the first data row.
+     * Used to auto-skip computed/derived columns during mapping.
+     *
+     * @return array<int, int> Column indices that contain formulas
+     */
+    public function detectFormulaColumns(string $filePath, string $worksheetName, int $columnCount): array
+    {
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($filePath);
+            $reader->setReadDataOnly(false);
+
+            if (method_exists($reader, 'setLoadSheetsOnly')) {
+                $reader->setLoadSheetsOnly([$worksheetName]);
+            }
+
+            $reader->setReadFilter(new class implements \PhpOffice\PhpSpreadsheet\Reader\IReadFilter
+            {
+                public function readCell($columnAddress, $row, $worksheetName = ''): bool
+                {
+                    return $row <= 2;
+                }
+            });
+
+            $spreadsheet = $reader->load($filePath);
+            $sheet = $spreadsheet->getSheetByName($worksheetName) ?? $spreadsheet->getSheet(0);
+
+            $formulaColumns = [];
+
+            for ($col = 0; $col < $columnCount; $col++) {
+                $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($col + 1).'2';
+                $cellValue = $sheet->getCell($coordinate)->getValue();
+
+                if (is_string($cellValue) && str_starts_with($cellValue, '=')) {
+                    $formulaColumns[] = $col;
+                }
+            }
+
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+
+            return $formulaColumns;
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -900,18 +1036,17 @@ class CourseDataImportService
         }
 
         // V-13: Unmatched students
-        $unmatchedCount = 0;
-        foreach ($rows as $row) {
-            $studentId = $studentIdColumn ? trim((string) ($row[$studentIdColumn['index']] ?? '')) : '';
+        $allStudentIds = collect($rows)
+            ->map(fn ($row) => $studentIdColumn ? trim((string) ($row[$studentIdColumn['index']] ?? '')) : '')
+            ->filter(fn ($id) => $id !== '')
+            ->unique()
+            ->values();
 
-            if ($studentId === '') {
-                continue;
-            }
+        $existingStudentIds = Student::whereIn('student_id_number', $allStudentIds)
+            ->pluck('student_id_number')
+            ->flip();
 
-            if (! Student::where('student_id_number', $studentId)->exists()) {
-                $unmatchedCount++;
-            }
-        }
+        $unmatchedCount = $allStudentIds->reject(fn ($id) => $existingStudentIds->has($id))->count();
 
         if ($unmatchedCount > 0) {
             $info[] = "{$unmatchedCount} student(s) are new and will be created during import.";

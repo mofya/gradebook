@@ -102,6 +102,7 @@ class CourseOfferingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with(['course', 'semester', 'lecturer', 'gradingScheme']))
             ->columns([
                 Tables\Columns\TextColumn::make('course.name')
                     ->sortable()

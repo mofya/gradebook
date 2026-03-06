@@ -22,6 +22,18 @@ class Year extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::saving(function (Year $year): void {
+            if ($year->is_current) {
+                static::query()
+                    ->where('id', '!=', $year->id ?? 0)
+                    ->where('is_current', true)
+                    ->update(['is_current' => false]);
+            }
+        });
+    }
+
     /**
      * Scope to get the current academic year.
      */

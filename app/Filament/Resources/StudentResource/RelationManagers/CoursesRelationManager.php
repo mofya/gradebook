@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\StudentResource\RelationManagers;
 
-use App\Models\Course;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -56,15 +56,15 @@ class CoursesRelationManager extends RelationManager
                 // Add filters if necessary
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make(), // Allow creating new courses
-                Tables\Actions\AttachAction::make(), // Allow attaching existing courses
+                Actions\CreateAction::make(),
+                Actions\AttachAction::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),    // Allow editing course details
-                Tables\Actions\DetachAction::make(),  // Allow detaching courses from the student
+                Actions\EditAction::make(),
+                Actions\DetachAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\DetachBulkAction::make(),
+                Actions\DetachBulkAction::make(),
             ]);
     }
 }

@@ -2,25 +2,37 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Student extends Model
 {
-    protected $fillable = ['first_name', 'last_name', 'email'];
+    use HasFactory;
 
-    public function courses()
+    protected $fillable = ['first_name', 'last_name', 'email', 'student_id_number', 'gender', 'program', 'year_of_study', 'study_mode', 'github_username'];
+
+    public function enrollments(): HasMany
     {
-        return $this->belongsToMany(Course::class)->withTimestamps();
+        return $this->hasMany(Enrollment::class);
     }
 
-    public function grades()
+    public function courses(): BelongsToMany
+    {
+        return $this->belongsToMany(Course::class)
+            ->withPivot('academic_year', 'semester')
+            ->withTimestamps();
+    }
+
+    public function grades(): HasMany
     {
         return $this->hasMany(Grade::class);
     }
 
-    public function totalGradeForCourse($courseId)
+    public function totalGradeForCourse(int $courseId): ?float
     {
-        $grades = $this->grades()->where('course_id', $courseId)->get();
+        $grades = $this->grades()->where('course_id', $courseId)->with('assessment')->get();
         $totalWeight = 0;
         $weightedGrade = 0;
 

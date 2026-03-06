@@ -5,8 +5,10 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\AssessmentResource\Pages;
 use App\Models\Assessment;
 use BackedEnum;
+use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -19,25 +21,61 @@ class AssessmentResource extends Resource
 
     protected static ?string $navigationLabel = 'Assessments';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Course Management';
+
+    protected static ?int $navigationSort = 3;
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-                Forms\Components\Select::make('course_id')
-                    ->label('Course')
-                    ->relationship('course', 'name')
-                    ->required(),
-                Forms\Components\TextInput::make('name')
-                    ->label('Assessment Name')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('weight')
-                    ->label('Weight (%)')
-                    ->required()
-                    ->numeric()
-                    ->minValue(0)
-                    ->maxValue(100)
-                    ->suffix('%'),
+                Section::make('Assessment Details')
+                    ->schema([
+                        Forms\Components\Select::make('course_id')
+                            ->label('Course')
+                            ->relationship('course', 'name')
+                            ->required(),
+                        Forms\Components\TextInput::make('name')
+                            ->label('Assessment Name')
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\Select::make('assessment_group_id')
+                            ->relationship('assessmentGroup', 'name')
+                            ->nullable()
+                            ->searchable()
+                            ->preload(),
+                        Forms\Components\DatePicker::make('due_date')
+                            ->nullable(),
+                    ])
+                    ->columns(2),
+
+                Section::make('Scoring')
+                    ->schema([
+                        Forms\Components\TextInput::make('weight')
+                            ->label('Weight (%)')
+                            ->required()
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->suffix('%'),
+                        Forms\Components\TextInput::make('max_raw_score')
+                            ->numeric()
+                            ->default(100),
+                        Forms\Components\TextInput::make('normalized_to')
+                            ->numeric()
+                            ->nullable(),
+                        Forms\Components\TextInput::make('sort_order')
+                            ->numeric()
+                            ->default(0),
+                    ])
+                    ->columns(4),
+
+                Section::make('Options')
+                    ->schema([
+                        Forms\Components\Toggle::make('has_subsections'),
+                        Forms\Components\Toggle::make('is_published'),
+                    ])
+                    ->columns(2),
             ]);
     }
 
@@ -56,6 +94,11 @@ class AssessmentResource extends Resource
                 Tables\Columns\TextColumn::make('weight')
                     ->label('Weight (%)')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('assessmentGroup.name')
+                    ->label('Group'),
+                Tables\Columns\TextColumn::make('max_raw_score'),
+                Tables\Columns\IconColumn::make('is_published')
+                    ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Created At')
                     ->dateTime(),
@@ -64,11 +107,11 @@ class AssessmentResource extends Resource
                 // Add any necessary filters
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make(),
             ]);
     }
 

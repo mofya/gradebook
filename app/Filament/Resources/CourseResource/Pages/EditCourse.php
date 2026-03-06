@@ -13,6 +13,12 @@ class EditCourse extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('assessment_weights')
+                ->label('Assessment Weights')
+                ->color('warning')
+                ->icon('heroicon-o-scale')
+                ->url(fn () => CourseResource::getUrl('assessment-weights', ['record' => $this->record])),
+
             Actions\DeleteAction::make(),
         ];
     }

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\CourseResource\Pages;
 use App\Filament\Resources\CourseResource;
 use App\Models\Course;
 use App\Models\Grade;
+use App\Services\GradingService;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
@@ -65,15 +66,44 @@ class EnterGrades extends Page
 
     public function submit(): void
     {
-        foreach ($this->grades as $student_id => $data) {
+        $gradingService = app(GradingService::class);
+
+        // Validate all marks first
+        foreach ($this->grades as $studentId => $data) {
+            $mark = $data['grade'];
+
+            if ($mark === null || $mark === '') {
+                continue;
+            }
+
+            if (! $gradingService->isValidMark((float) $mark)) {
+                Notification::make()
+                    ->title('Invalid mark for '.$data['student_name'].'. Marks must be between 0 and 100.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        }
+
+        // Save all valid grades
+        foreach ($this->grades as $studentId => $data) {
+            $mark = $data['grade'];
+
+            if ($mark === null || $mark === '') {
+                continue;
+            }
+
             Grade::updateOrCreate(
                 [
-                    'student_id' => $student_id,
+                    'student_id' => $studentId,
                     'course_id' => $this->course->id,
                     'assessment_id' => $this->assessment_id,
                 ],
                 [
-                    'grade' => $data['grade'],
+                    'grade' => $mark,
+                    'grade_letter' => $gradingService->getLetterGrade((float) $mark),
+                    'lecturer_id' => auth()->id(),
                 ]
             );
         }

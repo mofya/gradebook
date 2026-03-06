@@ -6,11 +6,12 @@ use App\Filament\Resources\CourseResource\Pages;
 use App\Filament\Resources\CourseResource\RelationManagers;
 use App\Models\Course;
 use BackedEnum;
+use Filament\Actions;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -20,20 +21,36 @@ class CourseResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Academic Setup';
+
+    protected static ?int $navigationSort = 4;
+
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-                TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
-                TextInput::make('code')
-                    ->required()
-                    ->unique(ignoreRecord: true)
-                    ->maxLength(100),
-                Select::make('year_id')
-                    ->relationship('year', 'name')
-                    ->required(),
+                Section::make('Course Information')
+                    ->schema([
+                        TextInput::make('name')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('code')
+                            ->required()
+                            ->unique(ignoreRecord: true)
+                            ->maxLength(100),
+                        Select::make('year_id')
+                            ->relationship('year', 'name')
+                            ->required(),
+                        Select::make('dept_id')
+                            ->relationship('department', 'dept_name')
+                            ->searchable()
+                            ->preload(),
+                        TextInput::make('credits')
+                            ->numeric()
+                            ->required()
+                            ->default(3),
+                    ])
+                    ->columns(2),
             ]);
     }
 
@@ -44,16 +61,18 @@ class CourseResource extends Resource
                 TextColumn::make('name')->sortable()->searchable(),
                 TextColumn::make('code')->sortable()->searchable(),
                 TextColumn::make('year.name')->label('Year')->sortable(),
+                TextColumn::make('department.dept_name')->label('Department')->sortable(),
+                TextColumn::make('credits')->sortable(),
             ])
             ->filters([
                 //
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Actions\EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                Actions\BulkActionGroup::make([
+                    Actions\DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -73,6 +92,7 @@ class CourseResource extends Resource
             'create' => Pages\CreateCourse::route('/create'),
             'edit' => Pages\EditCourse::route('/{record}/edit'),
             'enter-grades' => Pages\EnterGrades::route('/{record}/enter-grades'),
+            'assessment-weights' => Pages\AssessmentWeights::route('/{record}/assessment-weights'),
         ];
     }
 }

@@ -19,7 +19,9 @@ class EditCourse extends EditRecord
                 ->icon('heroicon-o-scale')
                 ->url(fn () => CourseResource::getUrl('assessment-weights', ['record' => $this->record])),
 
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Course')
+                ->modalDescription('Are you sure? This will remove the course and all associated offerings.'),
         ];
     }
 }

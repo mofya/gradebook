@@ -13,7 +13,9 @@ class EditGradeQuery extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Grade Query')
+                ->modalDescription('Are you sure? This will permanently remove this query and its messages.'),
         ];
     }
 }

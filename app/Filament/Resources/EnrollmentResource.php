@@ -12,6 +12,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class EnrollmentResource extends Resource
@@ -131,33 +132,79 @@ class EnrollmentResource extends Resource
                     ->label('Semester')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('status')
-                    ->badge(),
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'enrolled' => 'info',
+                        'completed' => 'success',
+                        'withdrawn' => 'danger',
+                        'deferred' => 'warning',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('study_mode')
                     ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'REGULAR' => 'info',
+                        'PARALLEL' => 'warning',
+                        'DISTANCE' => 'success',
+                        default => 'gray',
+                    })
                     ->placeholder('—'),
                 Tables\Columns\TextColumn::make('exam_status')
-                    ->badge(),
-                Tables\Columns\TextColumn::make('ca_total'),
-                Tables\Columns\TextColumn::make('exam_score'),
+                    ->badge()
+                    ->color(fn (?ExamStatus $state): string => match ($state) {
+                        ExamStatus::NotEntered => 'gray',
+                        ExamStatus::Supplementary => 'warning',
+                        ExamStatus::Deferred => 'info',
+                        ExamStatus::Exempt => 'success',
+                        ExamStatus::Absent => 'danger',
+                        ExamStatus::Withheld => 'danger',
+                        default => 'gray',
+                    }),
+                Tables\Columns\TextColumn::make('ca_total')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('exam_score')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('final_total'),
                 Tables\Columns\TextColumn::make('final_override')
                     ->label('Override')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('final_grade'),
                 Tables\Columns\TextColumn::make('comment')
                     ->limit(30)
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
+            ->defaultSort('student.email')
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        'enrolled' => 'Enrolled',
+                        'withdrawn' => 'Withdrawn',
+                        'deferred' => 'Deferred',
+                        'completed' => 'Completed',
+                    ]),
+                SelectFilter::make('exam_status')
+                    ->options(ExamStatus::class),
+                SelectFilter::make('course_offering_id')
+                    ->relationship('courseOffering', 'id')
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->course->code.' - '.$record->semester->name)
+                    ->label('Course Offering')
+                    ->searchable()
+                    ->preload(),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Enrollment')
+                    ->modalDescription('Are you sure? This will remove the enrollment and associated grade data.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Enrollments')
+                    ->modalDescription('Are you sure? This will remove the selected enrollments and associated grade data.'),
             ]);
     }
 

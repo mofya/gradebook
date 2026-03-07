@@ -61,10 +61,14 @@ class CoursesRelationManager extends RelationManager
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DetachAction::make(),
+                Actions\DetachAction::make()
+                    ->modalHeading('Detach Course')
+                    ->modalDescription('Are you sure? This will remove the student from this course.'),
             ])
             ->bulkActions([
-                Actions\DetachBulkAction::make(),
+                Actions\DetachBulkAction::make()
+                    ->modalHeading('Detach Selected Courses')
+                    ->modalDescription('Are you sure? This will remove the student from the selected courses.'),
             ]);
     }
 }

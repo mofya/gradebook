@@ -12,6 +12,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class GradeQueryResource extends Resource
@@ -145,17 +146,37 @@ class GradeQueryResource extends Resource
                     ->label('Submitted'),
                 Tables\Columns\TextColumn::make('resolved_at')
                     ->since()
-                    ->label('Resolved'),
+                    ->label('Resolved')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        'open' => 'Open',
+                        'under_review' => 'Under Review',
+                        'resolved' => 'Resolved',
+                        'rejected' => 'Rejected',
+                    ]),
+                SelectFilter::make('priority')
+                    ->options([
+                        'low' => 'Low',
+                        'normal' => 'Normal',
+                        'high' => 'High',
+                        'urgent' => 'Urgent',
+                    ]),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Grade Query')
+                    ->modalDescription('Are you sure? This will permanently remove this query and its messages.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Grade Queries')
+                    ->modalDescription('Are you sure? This will permanently remove the selected queries and their messages.'),
             ]);
     }
 

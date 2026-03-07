@@ -12,6 +12,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class GradeResource extends Resource
@@ -100,20 +102,31 @@ class GradeResource extends Resource
                 Tables\Columns\TextColumn::make('grade_letter'),
                 Tables\Columns\IconColumn::make('is_published')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('lecturer.name'),
+                Tables\Columns\TextColumn::make('lecturer.name')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Recorded At')
-                    ->dateTime(),
+                    ->dateTime()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
-                // Add any necessary filters
+                SelectFilter::make('course')
+                    ->relationship('course', 'name'),
+                TernaryFilter::make('is_published'),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Grade')
+                    ->modalDescription('Are you sure? This will permanently remove this grade record.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Grades')
+                    ->modalDescription('Are you sure? This will permanently remove the selected grade records.'),
             ]);
     }
 

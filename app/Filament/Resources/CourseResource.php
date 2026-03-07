@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class CourseResource extends Resource
@@ -64,15 +65,24 @@ class CourseResource extends Resource
                 TextColumn::make('department.dept_name')->label('Department')->sortable(),
                 TextColumn::make('credits')->sortable(),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                //
+                SelectFilter::make('year_id')
+                    ->relationship('year', 'name')
+                    ->label('Year'),
+                SelectFilter::make('dept_id')
+                    ->relationship('department', 'dept_name')
+                    ->label('Department'),
             ])
             ->actions([
                 Actions\EditAction::make(),
             ])
             ->bulkActions([
                 Actions\BulkActionGroup::make([
-                    Actions\DeleteBulkAction::make(),
+                    Actions\DeleteBulkAction::make()
+                        ->modalHeading('Delete Selected Courses')
+                        ->modalDescription('Are you sure? This will remove the selected courses and all associated offerings.'),
                 ]),
             ]);
     }

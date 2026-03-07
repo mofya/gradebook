@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class YearResource extends Resource
@@ -71,17 +72,24 @@ class YearResource extends Resource
                     ->label('Current'),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Created At')
-                    ->dateTime(),
+                    ->dateTime()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                // Add any filters if needed
+                TernaryFilter::make('is_current'),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Academic Year')
+                    ->modalDescription('Are you sure? This will remove the year and all its semesters.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Academic Years')
+                    ->modalDescription('Are you sure? This will remove the selected years and all their semesters.'),
             ]);
     }
 

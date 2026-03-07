@@ -88,7 +88,8 @@ class AssessmentGroupsRelationManager extends RelationManager
                     ->icon('heroicon-o-calculator')
                     ->color('warning')
                     ->requiresConfirmation()
-                    ->modalDescription('This will recalculate CA totals, exam totals, final marks, letter grades, and grade points for all enrolled students.')
+                    ->modalHeading('Recalculate All Grades')
+                    ->modalDescription('This will recalculate CA totals, exam totals, final marks, letter grades, and grade points for all enrolled students. Existing grades will be updated.')
                     ->action(function () {
                         $gradingService = app(GradingService::class);
                         $count = $gradingService->resolveAllGrades($this->getOwnerRecord());
@@ -111,7 +112,9 @@ class AssessmentGroupsRelationManager extends RelationManager
                     ))
                     ->modalHeading(fn (Model $record) => $record->name.' — Assessments'),
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Assessment Group')
+                    ->modalDescription('Are you sure? This will remove the group and its assessments.'),
             ]);
     }
 }

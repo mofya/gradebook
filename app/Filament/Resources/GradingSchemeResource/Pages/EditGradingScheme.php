@@ -13,7 +13,9 @@ class EditGradingScheme extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Grading Scheme')
+                ->modalDescription('Are you sure? This will remove the scheme and its grade levels.'),
         ];
     }
 }

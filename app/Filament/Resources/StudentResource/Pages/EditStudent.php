@@ -13,7 +13,9 @@ class EditStudent extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Student')
+                ->modalDescription('Are you sure? This will remove the student and all their enrollment records.'),
         ];
     }
 }

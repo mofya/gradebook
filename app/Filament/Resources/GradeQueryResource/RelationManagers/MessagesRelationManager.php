@@ -52,7 +52,9 @@ class MessagesRelationManager extends RelationManager
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Message')
+                    ->modalDescription('Are you sure? This will permanently remove this message from the query.'),
             ]);
     }
 }

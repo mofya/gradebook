@@ -13,7 +13,9 @@ class EditSemester extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Semester')
+                ->modalDescription('Are you sure? This will remove the semester and all associated course offerings.'),
         ];
     }
 }

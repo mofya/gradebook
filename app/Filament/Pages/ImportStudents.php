@@ -4,10 +4,13 @@ namespace App\Filament\Pages;
 
 use App\Exports\StudentImportTemplate;
 use App\Imports\StudentsImport;
+use App\Models\CourseOffering;
+use App\Models\Enrollment;
 use BackedEnum;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -37,13 +40,39 @@ class ImportStudents extends Page
         return $schema
             ->statePath('data')
             ->schema([
-                Forms\Components\FileUpload::make('file')
-                    ->label('Student Excel File')
-                    ->helperText('Required columns: first_name, last_name, email. Optional: student_id, gender, program, year_of_study, github_username')
-                    ->required()
-                    ->disk('local')
-                    ->directory('student-imports')
-                    ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']),
+                Section::make('Course Offering')
+                    ->description('Select the course offering to enroll imported students into.')
+                    ->icon('heroicon-o-academic-cap')
+                    ->schema([
+                        Forms\Components\Select::make('course_offering_id')
+                            ->label('Course Offering')
+                            ->options(
+                                CourseOffering::query()
+                                    ->with(['course', 'semester.year'])
+                                    ->get()
+                                    ->mapWithKeys(fn (CourseOffering $offering) => [
+                                        $offering->id => $offering->course->code.' - '.$offering->course->name.' ('.$offering->semester->year->name.', '.$offering->semester->name.')',
+                                    ])
+                            )
+                            ->searchable()
+                            ->required()
+                            ->helperText('Students will be enrolled into this course offering after import.'),
+                    ])
+                    ->columnSpanFull(),
+
+                Section::make('Upload File')
+                    ->description('Upload an Excel file with student data.')
+                    ->icon('heroicon-o-arrow-up-on-square')
+                    ->schema([
+                        Forms\Components\FileUpload::make('file')
+                            ->label('Student Excel File')
+                            ->helperText('Required columns: first_name, last_name, email. Optional: student_id, gender, program, year_of_study, github_username')
+                            ->required()
+                            ->disk('local')
+                            ->directory('student-imports')
+                            ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -91,11 +120,30 @@ class ImportStudents extends Page
             return;
         }
 
+        $courseOfferingId = $data['course_offering_id'];
+
         $importer = new StudentsImport;
         Excel::import($importer, $filePath);
 
         $imported = $importer->getImportedCount();
         $skipped = $importer->getSkippedCount();
+        $importedStudents = $importer->getImportedStudents();
+
+        // Enroll imported students into the selected course offering
+        $enrolled = 0;
+        foreach ($importedStudents as $student) {
+            Enrollment::firstOrCreate(
+                [
+                    'student_id' => $student->id,
+                    'course_offering_id' => $courseOfferingId,
+                ],
+                [
+                    'source' => 'import',
+                    'status' => 'active',
+                ]
+            );
+            $enrolled++;
+        }
 
         $this->form->fill();
 
@@ -108,7 +156,7 @@ class ImportStudents extends Page
             return;
         }
 
-        $message = "{$imported} students imported.";
+        $message = "{$imported} students imported, {$enrolled} enrolled.";
         if ($skipped > 0) {
             $message .= " {$skipped} rows skipped.";
         }

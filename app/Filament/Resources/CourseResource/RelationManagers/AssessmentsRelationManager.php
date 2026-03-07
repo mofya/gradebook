@@ -48,10 +48,14 @@ class AssessmentsRelationManager extends RelationManager
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Assessment')
+                    ->modalDescription('Are you sure? This will remove the assessment and all associated grades.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Assessments')
+                    ->modalDescription('Are you sure? This will remove the selected assessments and all associated grades.'),
             ]);
     }
 }

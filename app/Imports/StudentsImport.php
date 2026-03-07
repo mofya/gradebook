@@ -12,6 +12,9 @@ class StudentsImport implements ToModel, WithHeadingRow
 
     protected int $skipped = 0;
 
+    /** @var array<int, Student> */
+    protected array $importedStudents = [];
+
     /** @var array<string, string> */
     protected const REQUIRED_COLUMNS = [
         'email' => 'email',
@@ -115,10 +118,14 @@ class StudentsImport implements ToModel, WithHeadingRow
 
         $this->imported++;
 
-        return Student::updateOrCreate(
+        $student = Student::updateOrCreate(
             ['email' => $email],
             $attributes,
         );
+
+        $this->importedStudents[] = $student;
+
+        return $student;
     }
 
     public function getImportedCount(): int
@@ -129,5 +136,13 @@ class StudentsImport implements ToModel, WithHeadingRow
     public function getSkippedCount(): int
     {
         return $this->skipped;
+    }
+
+    /**
+     * @return array<int, Student>
+     */
+    public function getImportedStudents(): array
+    {
+        return $this->importedStudents;
     }
 }

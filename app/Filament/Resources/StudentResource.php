@@ -8,10 +8,13 @@ use App\Models\Student;
 use BackedEnum;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class StudentResource extends Resource
@@ -73,6 +76,43 @@ class StudentResource extends Resource
             ]);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Section::make('Personal Information')
+                    ->icon(Heroicon::OutlinedUser)
+                    ->schema([
+                        TextEntry::make('first_name'),
+                        TextEntry::make('last_name'),
+                        TextEntry::make('email')
+                            ->icon(Heroicon::OutlinedEnvelope),
+                        TextEntry::make('student_id_number')
+                            ->label('Student ID')
+                            ->placeholder('Not provided'),
+                        TextEntry::make('gender')
+                            ->placeholder('Not specified'),
+                    ])
+                    ->columns(2),
+
+                Section::make('Academic Details')
+                    ->icon(Heroicon::OutlinedAcademicCap)
+                    ->schema([
+                        TextEntry::make('program')
+                            ->placeholder('Not specified'),
+                        TextEntry::make('year_of_study')
+                            ->placeholder('Not specified'),
+                        TextEntry::make('study_mode')
+                            ->badge()
+                            ->placeholder('Not specified'),
+                        TextEntry::make('created_at')
+                            ->label('Registered')
+                            ->dateTime(),
+                    ])
+                    ->columns(2),
+            ]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -96,20 +136,59 @@ class StudentResource extends Resource
                 Tables\Columns\TextColumn::make('year_of_study')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('study_mode')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Registered At')
-                    ->dateTime(),
+                    ->dateTime()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('last_name', 'asc')
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                // Add any necessary filters
+                SelectFilter::make('gender')
+                    ->options([
+                        'Male' => 'Male',
+                        'Female' => 'Female',
+                    ]),
+                SelectFilter::make('year_of_study')
+                    ->options([
+                        '1' => 'Year 1',
+                        '2' => 'Year 2',
+                        '3' => 'Year 3',
+                        '4' => 'Year 4',
+                        '5' => 'Year 5',
+                        '6' => 'Year 6',
+                        '7' => 'Year 7',
+                    ]),
+                SelectFilter::make('study_mode')
+                    ->options([
+                        'Full-time' => 'Full-time',
+                        'Part-time' => 'Part-time',
+                        'Distance' => 'Distance',
+                    ]),
+                SelectFilter::make('program')
+                    ->searchable()
+                    ->preload()
+                    ->options(fn (): array => Student::query()
+                        ->whereNotNull('program')
+                        ->distinct()
+                        ->orderBy('program')
+                        ->pluck('program', 'program')
+                        ->all()),
             ])
             ->actions([
+                Actions\ViewAction::make(),
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Student')
+                    ->modalDescription('Are you sure? This will remove the student and all their enrollment records.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Students')
+                    ->modalDescription('Are you sure? This will remove the selected students and all their enrollment records.'),
             ]);
     }
 
@@ -125,6 +204,7 @@ class StudentResource extends Resource
         return [
             'index' => Pages\ListStudents::route('/'),
             'create' => Pages\CreateStudent::route('/create'),
+            'view' => Pages\ViewStudent::route('/{record}'),
             'edit' => Pages\EditStudent::route('/{record}/edit'),
         ];
     }

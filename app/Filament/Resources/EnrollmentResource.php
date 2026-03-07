@@ -14,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class EnrollmentResource extends Resource
 {
@@ -24,6 +25,31 @@ class EnrollmentResource extends Resource
     protected static string|\UnitEnum|null $navigationGroup = 'Students & Grading';
 
     protected static ?int $navigationSort = 2;
+
+    protected static ?string $recordTitleAttribute = 'student.email';
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['student.email', 'student.first_name', 'student.last_name', 'courseOffering.course.code'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Student' => $record->student?->email ?? '—',
+            'Course' => $record->courseOffering?->course?->code ?? '—',
+        ];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        return (string) static::getModel()::where('status', 'active')->count();
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'info';
+    }
 
     public static function form(Schema $schema): Schema
     {

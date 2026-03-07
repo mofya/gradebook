@@ -15,6 +15,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class CourseResource extends Resource
 {
@@ -25,6 +26,20 @@ class CourseResource extends Resource
     protected static string|\UnitEnum|null $navigationGroup = 'Academic Setup';
 
     protected static ?int $navigationSort = 4;
+
+    protected static ?string $recordTitleAttribute = 'name';
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'code'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Code' => $record->code,
+        ];
+    }
 
     public static function form(Schema $schema): Schema
     {

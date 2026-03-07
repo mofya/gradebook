@@ -18,6 +18,7 @@ use Filament\Tables;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class CourseOfferingResource extends Resource
 {
@@ -28,6 +29,38 @@ class CourseOfferingResource extends Resource
     protected static string|\UnitEnum|null $navigationGroup = 'Course Management';
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $recordTitleAttribute = 'course.code';
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['course.code', 'course.name', 'semester.name'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Course' => $record->course?->name ?? '—',
+            'Semester' => $record->semester?->name ?? '—',
+        ];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::where('status', 'active')->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'success';
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Active course offerings';
+    }
 
     public static function form(Schema $schema): Schema
     {

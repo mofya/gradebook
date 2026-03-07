@@ -14,6 +14,19 @@ class AdminDashboard extends BaseDashboard
 {
     protected string $view = 'filament.pages.admin-dashboard';
 
+    public function getFooterWidgets(): array
+    {
+        return [
+            \App\Filament\Widgets\GradeDistributionChart::class,
+            \App\Filament\Widgets\EnrollmentTrendsChart::class,
+        ];
+    }
+
+    public function getFooterWidgetsColumns(): int|array
+    {
+        return 2;
+    }
+
     public function getViewData(): array
     {
         $currentYear = Year::current()->first();

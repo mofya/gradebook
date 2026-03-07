@@ -251,8 +251,8 @@ class CourseOfferingResource extends Resource
     {
         return [
             'index' => Pages\ListCourseOfferings::route('/'),
-            'view' => Pages\ViewCourseOffering::route('/{record}'),
             'create' => Pages\CreateCourseOffering::route('/create'),
+            'view' => Pages\ViewCourseOffering::route('/{record}'),
             'edit' => Pages\EditCourseOffering::route('/{record}/edit'),
             'weight-breakdown' => Pages\WeightBreakdown::route('/{record}/weight-breakdown'),
             'weight-overview' => Pages\WeightOverview::route('/{record}/weight-overview'),

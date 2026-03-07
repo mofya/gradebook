@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class AssessmentResource extends Resource
@@ -101,17 +102,24 @@ class AssessmentResource extends Resource
                     ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Created At')
-                    ->dateTime(),
+                    ->dateTime()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                // Add any necessary filters
+                TernaryFilter::make('is_published'),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Assessment')
+                    ->modalDescription('Are you sure? This will remove the assessment and all associated grades.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Assessments')
+                    ->modalDescription('Are you sure? This will remove the selected assessments and all associated grades.'),
             ]);
     }
 

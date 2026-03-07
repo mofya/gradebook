@@ -13,7 +13,9 @@ class EditAssessmentGroup extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Assessment Group')
+                ->modalDescription('Are you sure? This will remove the group and its assessments.'),
         ];
     }
 }

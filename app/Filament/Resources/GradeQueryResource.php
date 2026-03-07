@@ -12,7 +12,9 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class GradeQueryResource extends Resource
 {
@@ -23,6 +25,40 @@ class GradeQueryResource extends Resource
     protected static string|\UnitEnum|null $navigationGroup = 'Students & Grading';
 
     protected static ?int $navigationSort = 4;
+
+    protected static ?string $recordTitleAttribute = 'subject';
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['subject', 'student.email', 'student.first_name', 'student.last_name'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Student' => $record->student?->email ?? '—',
+            'Status' => ucfirst(str_replace('_', ' ', $record->status)),
+        ];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::whereIn('status', ['open', 'under_review'])->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        $count = static::getModel()::whereIn('status', ['open', 'under_review'])->count();
+
+        return $count > 5 ? 'danger' : ($count > 0 ? 'warning' : null);
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Open grade queries';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -145,17 +181,37 @@ class GradeQueryResource extends Resource
                     ->label('Submitted'),
                 Tables\Columns\TextColumn::make('resolved_at')
                     ->since()
-                    ->label('Resolved'),
+                    ->label('Resolved')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options([
+                        'open' => 'Open',
+                        'under_review' => 'Under Review',
+                        'resolved' => 'Resolved',
+                        'rejected' => 'Rejected',
+                    ]),
+                SelectFilter::make('priority')
+                    ->options([
+                        'low' => 'Low',
+                        'normal' => 'Normal',
+                        'high' => 'High',
+                        'urgent' => 'Urgent',
+                    ]),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Grade Query')
+                    ->modalDescription('Are you sure? This will permanently remove this query and its messages.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Grade Queries')
+                    ->modalDescription('Are you sure? This will permanently remove the selected queries and their messages.'),
             ]);
     }
 

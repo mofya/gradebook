@@ -13,7 +13,9 @@ class EditEnrollment extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Enrollment')
+                ->modalDescription('Are you sure? This will remove the enrollment and associated grade data.'),
         ];
     }
 }

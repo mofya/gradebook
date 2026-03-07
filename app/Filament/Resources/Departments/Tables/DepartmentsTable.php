@@ -35,7 +35,9 @@ class DepartmentsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->modalHeading('Delete Selected Departments')
+                        ->modalDescription('Are you sure? This will remove the selected departments and disassociate their courses.'),
                 ]),
             ]);
     }

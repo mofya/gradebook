@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class AssessmentGroupResource extends Resource
@@ -110,9 +111,19 @@ class AssessmentGroupResource extends Resource
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('type')
-                    ->badge(),
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'ca' => 'info',
+                        'exam' => 'warning',
+                        default => 'gray',
+                    }),
                 Tables\Columns\TextColumn::make('weight_mode')
                     ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'percentage' => 'info',
+                        'points' => 'warning',
+                        default => 'gray',
+                    })
                     ->label('Mode'),
                 Tables\Columns\TextColumn::make('weight_percentage')
                     ->suffix('%')
@@ -120,18 +131,30 @@ class AssessmentGroupResource extends Resource
                     ->placeholder('—'),
                 Tables\Columns\TextColumn::make('weight_points')
                     ->label('Weight Pts')
-                    ->placeholder('—'),
-                Tables\Columns\TextColumn::make('sort_order'),
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('sort_order')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                //
+                SelectFilter::make('type')
+                    ->options([
+                        'ca' => 'CA',
+                        'exam' => 'Exam',
+                    ]),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Assessment Group')
+                    ->modalDescription('Are you sure? This will remove the group and its assessments.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Assessment Groups')
+                    ->modalDescription('Are you sure? This will remove the selected groups and their assessments.'),
             ]);
     }
 

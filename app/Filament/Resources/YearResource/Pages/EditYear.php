@@ -13,7 +13,9 @@ class EditYear extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Academic Year')
+                ->modalDescription('Are you sure? This will remove the year and all its semesters.'),
         ];
     }
 }

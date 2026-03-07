@@ -9,11 +9,16 @@ use App\Models\CourseOffering;
 use BackedEnum;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class CourseOfferingResource extends Resource
 {
@@ -24,6 +29,38 @@ class CourseOfferingResource extends Resource
     protected static string|\UnitEnum|null $navigationGroup = 'Course Management';
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $recordTitleAttribute = 'course.code';
+
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['course.code', 'course.name', 'semester.name'];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        return [
+            'Course' => $record->course?->name ?? '—',
+            'Semester' => $record->semester?->name ?? '—',
+        ];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::where('status', 'active')->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'success';
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Active course offerings';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -99,6 +136,52 @@ class CourseOfferingResource extends Resource
             ]);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema
+            ->schema([
+                Section::make('Course & Semester')
+                    ->icon('heroicon-o-academic-cap')
+                    ->schema([
+                        TextEntry::make('course.name')
+                            ->label('Course'),
+                        TextEntry::make('course.code')
+                            ->label('Course Code'),
+                        TextEntry::make('semester.name')
+                            ->label('Semester'),
+                        TextEntry::make('section')
+                            ->placeholder('No section'),
+                        TextEntry::make('lecturer.name')
+                            ->label('Lecturer')
+                            ->placeholder('Unassigned'),
+                    ])
+                    ->columns(2),
+
+                Section::make('Grading Configuration')
+                    ->icon('heroicon-o-calculator')
+                    ->schema([
+                        TextEntry::make('gradingScheme.name')
+                            ->label('Grading Scheme')
+                            ->placeholder('Default'),
+                        TextEntry::make('ca_weight')
+                            ->suffix('%'),
+                        TextEntry::make('exam_weight')
+                            ->suffix('%'),
+                    ])
+                    ->columns(3),
+
+                Section::make('Status')
+                    ->icon('heroicon-o-signal')
+                    ->schema([
+                        TextEntry::make('status')
+                            ->badge(),
+                        IconEntry::make('is_published')
+                            ->boolean(),
+                    ])
+                    ->columns(2),
+            ]);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -120,25 +203,39 @@ class CourseOfferingResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('gradingScheme.name')
                     ->label('Grading Scheme')
-                    ->placeholder('Default'),
+                    ->placeholder('Default')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('status')
                     ->badge(),
                 Tables\Columns\TextColumn::make('ca_weight')
-                    ->suffix('%'),
+                    ->suffix('%')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('exam_weight')
-                    ->suffix('%'),
+                    ->suffix('%')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\IconColumn::make('is_published')
                     ->boolean(),
             ])
             ->filters([
-                //
+                SelectFilter::make('status')
+                    ->options(OfferingStatus::class),
+                SelectFilter::make('semester')
+                    ->relationship('semester', 'name'),
+                TernaryFilter::make('is_published'),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->actions([
+                Actions\ViewAction::make(),
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Course Offering')
+                    ->modalDescription('Are you sure? This will remove the offering, its enrollments, and all grade data.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Course Offerings')
+                    ->modalDescription('Are you sure? This will remove the selected offerings, their enrollments, and all grade data.'),
             ]);
     }
 
@@ -154,6 +251,7 @@ class CourseOfferingResource extends Resource
     {
         return [
             'index' => Pages\ListCourseOfferings::route('/'),
+            'view' => Pages\ViewCourseOffering::route('/{record}'),
             'create' => Pages\CreateCourseOffering::route('/create'),
             'edit' => Pages\EditCourseOffering::route('/{record}/edit'),
             'weight-breakdown' => Pages\WeightBreakdown::route('/{record}/weight-breakdown'),

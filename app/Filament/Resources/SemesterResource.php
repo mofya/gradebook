@@ -11,6 +11,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class SemesterResource extends Resource
@@ -60,15 +62,24 @@ class SemesterResource extends Resource
                 Tables\Columns\IconColumn::make('is_active')
                     ->boolean(),
             ])
+            ->persistSearchInSession()
+            ->persistFiltersInSession()
             ->filters([
-                //
+                SelectFilter::make('year_id')
+                    ->relationship('year', 'name')
+                    ->label('Year'),
+                TernaryFilter::make('is_active'),
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Semester')
+                    ->modalDescription('Are you sure? This will remove the semester and all associated course offerings.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Semesters')
+                    ->modalDescription('Are you sure? This will remove the selected semesters and all associated course offerings.'),
             ]);
     }
 

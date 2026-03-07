@@ -13,7 +13,9 @@ class EditGrade extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Grade')
+                ->modalDescription('Are you sure? This will permanently remove this grade record.'),
         ];
     }
 }

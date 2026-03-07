@@ -23,6 +23,8 @@ class EditCourseOffering extends EditRecord
                 ->color('success')
                 ->icon('heroicon-o-play')
                 ->requiresConfirmation()
+                ->modalHeading('Activate Course Offering')
+                ->modalDescription('This will change the offering status from Draft to Active, allowing grade entry.')
                 ->visible(fn () => $this->record->status === OfferingStatus::Draft)
                 ->action(function () {
                     try {
@@ -38,6 +40,8 @@ class EditCourseOffering extends EditRecord
                 ->color('warning')
                 ->icon('heroicon-o-lock-closed')
                 ->requiresConfirmation()
+                ->modalHeading('Lock Course Offering')
+                ->modalDescription('This will lock the offering, preventing further grade modifications.')
                 ->visible(fn () => $this->record->status === OfferingStatus::Active)
                 ->action(function () {
                     try {
@@ -53,6 +57,8 @@ class EditCourseOffering extends EditRecord
                 ->color('primary')
                 ->icon('heroicon-o-eye')
                 ->requiresConfirmation()
+                ->modalHeading('Publish Course Offering')
+                ->modalDescription('This will publish the offering, making grades visible to students.')
                 ->visible(fn () => $this->record->status === OfferingStatus::Locked)
                 ->action(function () {
                     try {
@@ -108,6 +114,8 @@ class EditCourseOffering extends EditRecord
                 ->color('gray')
                 ->icon('heroicon-o-document-duplicate')
                 ->requiresConfirmation()
+                ->modalHeading('Duplicate Course Offering')
+                ->modalDescription('This will create a copy of this offering as a new draft, including its assessment groups and assessments.')
                 ->action(function () {
                     $newOffering = $this->record->duplicate();
                     Notification::make()
@@ -118,7 +126,9 @@ class EditCourseOffering extends EditRecord
                     return redirect(CourseOfferingResource::getUrl('edit', ['record' => $newOffering]));
                 }),
 
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->modalHeading('Delete Course Offering')
+                ->modalDescription('Are you sure? This will remove the offering, its enrollments, and all grade data.'),
         ];
     }
 }

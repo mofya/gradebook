@@ -63,10 +63,14 @@ class LevelsRelationManager extends RelationManager
             ])
             ->actions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->modalHeading('Delete Grade Level')
+                    ->modalDescription('Are you sure? This will remove this grade level from the scheme.'),
             ])
             ->bulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->modalHeading('Delete Selected Grade Levels')
+                    ->modalDescription('Are you sure? This will remove the selected grade levels from the scheme.'),
             ]);
     }
 }

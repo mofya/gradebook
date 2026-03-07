@@ -4,11 +4,14 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\StudentResource\Pages;
 use App\Filament\Resources\StudentResource\RelationManagers;
+use App\Models\CourseOffering;
+use App\Models\Enrollment;
 use App\Models\Student;
 use BackedEnum;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -16,7 +19,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class StudentResource extends Resource
 {
@@ -212,6 +217,63 @@ class StudentResource extends Resource
                     ->modalDescription('Are you sure? This will remove the student and all their enrollment records.'),
             ])
             ->bulkActions([
+                Actions\BulkAction::make('enroll')
+                    ->label('Enroll in Course')
+                    ->icon('heroicon-o-academic-cap')
+                    ->color('success')
+                    ->modalHeading('Enroll Selected Students')
+                    ->modalDescription('Choose the course offering to enroll the selected students into.')
+                    ->modalSubmitActionLabel('Enroll')
+                    ->form([
+                        Forms\Components\Select::make('course_offering_id')
+                            ->label('Course Offering')
+                            ->options(
+                                CourseOffering::query()
+                                    ->with(['course', 'semester.year'])
+                                    ->get()
+                                    ->mapWithKeys(fn (CourseOffering $offering) => [
+                                        $offering->id => $offering->course->code.' - '.$offering->course->name.' ('.$offering->semester->year->name.', '.$offering->semester->name.')',
+                                    ])
+                            )
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(function (Collection $records, array $data): void {
+                        $enrolled = 0;
+                        $skipped = 0;
+
+                        DB::transaction(function () use ($records, $data, &$enrolled, &$skipped): void {
+                            foreach ($records as $student) {
+                                $created = Enrollment::firstOrCreate(
+                                    [
+                                        'student_id' => $student->id,
+                                        'course_offering_id' => $data['course_offering_id'],
+                                    ],
+                                    [
+                                        'source' => 'manual',
+                                        'status' => 'active',
+                                    ]
+                                );
+
+                                if ($created->wasRecentlyCreated) {
+                                    $enrolled++;
+                                } else {
+                                    $skipped++;
+                                }
+                            }
+                        });
+
+                        $message = "{$enrolled} students enrolled.";
+                        if ($skipped > 0) {
+                            $message .= " {$skipped} already enrolled (skipped).";
+                        }
+
+                        Notification::make()
+                            ->title($message)
+                            ->success()
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
                 Actions\DeleteBulkAction::make()
                     ->modalHeading('Delete Selected Students')
                     ->modalDescription('Are you sure? This will remove the selected students and all their enrollment records.'),

@@ -156,6 +156,11 @@ class ImportStudents extends Page
             return;
         }
 
+        $offering = CourseOffering::with(['course', 'semester.year'])->find($courseOfferingId);
+        $offeringLabel = $offering
+            ? $offering->course->code.' - '.$offering->course->name.' ('.$offering->semester->year->name.', '.$offering->semester->name.')'
+            : '';
+
         $message = "{$imported} students imported, {$enrolled} enrolled.";
         if ($skipped > 0) {
             $message .= " {$skipped} rows skipped.";
@@ -165,6 +170,13 @@ class ImportStudents extends Page
             ->title($message)
             ->success()
             ->send();
+
+        Notification::make()
+            ->title('Student Import Complete')
+            ->icon('heroicon-o-arrow-up-on-square')
+            ->body("{$message} Course: {$offeringLabel}")
+            ->success()
+            ->sendToDatabase(auth()->user());
     }
 
     /**

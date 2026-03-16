@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Enums\ExamStatus;
+use App\Models\AssessmentGroup;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
+use App\Models\GradeResult;
 use App\Models\GradingScheme;
+use Illuminate\Support\Collection;
 
 class GradingService
 {
@@ -159,54 +162,73 @@ class GradingService
 
     /**
      * Compute the total for a single assessment group, respecting its aggregation mode.
+     * Uses percentage scores (raw_score / max_raw_score * 100) weighted by each assessment's weight.
      *
-     * @param  \Illuminate\Support\Collection<int, \App\Models\GradeResult>  $gradeResultsByAssessment
+     * @param  Collection<int, GradeResult>  $gradeResultsByAssessment
      */
-    protected function computeGroupTotal(\App\Models\AssessmentGroup $group, \Illuminate\Support\Collection $gradeResultsByAssessment): float
+    protected function computeGroupTotal(AssessmentGroup $group, Collection $gradeResultsByAssessment): float
     {
-        $scores = [];
+        /** @var array<int, array{percentage: float, weight: float}> $entries */
+        $entries = [];
 
         foreach ($group->assessments as $assessment) {
             $result = $gradeResultsByAssessment->get($assessment->id);
 
             if ($result && ! $result->is_excused && $result->raw_score !== null) {
-                $normalized = $result->normalized_score ?? $result->calculateNormalizedScore();
-                $scores[] = (float) ($normalized ?? 0);
+                $maxRaw = (float) ($assessment->max_raw_score ?: 100);
+                $entries[] = [
+                    'percentage' => ((float) $result->raw_score / $maxRaw) * 100,
+                    'weight' => (float) ($assessment->weight ?: 1),
+                ];
             }
         }
 
-        if (empty($scores)) {
+        if (empty($entries)) {
             return 0.0;
         }
 
         $mode = $group->aggregation_mode ?? 'WEIGHTED_AVERAGE';
 
         return match ($mode) {
-            'MAX' => max($scores),
-            'DROP_LOWEST' => $this->computeDropLowest($scores, (int) ($group->drop_count ?? 0)),
-            default => array_sum($scores),
+            'MAX' => max(array_column($entries, 'percentage')),
+            'DROP_LOWEST' => $this->computeDropLowest($entries, (int) ($group->drop_count ?? 0)),
+            default => $this->computeWeightedAverage($entries),
         };
     }
 
     /**
-     * Drop the N lowest scores, then average the remaining.
+     * Compute weighted average: sum(percentage * weight) / sum(weight).
      *
-     * @param  array<int, float>  $scores
+     * @param  array<int, array{percentage: float, weight: float}>  $entries
      */
-    protected function computeDropLowest(array $scores, int $dropCount): float
+    protected function computeWeightedAverage(array $entries): float
     {
-        if ($dropCount <= 0 || $dropCount >= count($scores)) {
-            return array_sum($scores);
+        $weightedSum = 0.0;
+        $totalWeight = 0.0;
+
+        foreach ($entries as $entry) {
+            $weightedSum += $entry['percentage'] * $entry['weight'];
+            $totalWeight += $entry['weight'];
         }
 
-        sort($scores);
-        $kept = array_slice($scores, $dropCount);
+        return $totalWeight > 0 ? $weightedSum / $totalWeight : 0.0;
+    }
 
-        if (empty($kept)) {
-            return 0.0;
+    /**
+     * Drop the N lowest-percentage entries, then compute weighted average of the rest.
+     *
+     * @param  array<int, array{percentage: float, weight: float}>  $entries
+     */
+    protected function computeDropLowest(array $entries, int $dropCount): float
+    {
+        if ($dropCount <= 0 || $dropCount >= count($entries)) {
+            return $this->computeWeightedAverage($entries);
         }
 
-        return array_sum($kept) / count($kept) * count($scores);
+        usort($entries, fn ($a, $b) => $a['percentage'] <=> $b['percentage']);
+        $kept = array_slice($entries, $dropCount);
+
+        return $this->computeWeightedAverage($kept);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Filament\Student\Pages;
 use App\Models\Enrollment;
 use App\Models\GradeQuery;
 use App\Models\Student;
+use App\Services\BackfillLabGradesService;
 use App\Services\GradingService;
 use Filament\Notifications\Notification;
 use Filament\Pages\Dashboard as BaseDashboard;
@@ -17,11 +18,16 @@ class StudentDashboard extends BaseDashboard
 
     public bool $editingGithub = false;
 
+    public string $sex = '';
+
+    public bool $editingSex = false;
+
     public function mount(): void
     {
         $student = $this->getStudent();
 
         $this->githubUsername = $student?->github_username ?? '';
+        $this->sex = $student?->gender ?? '';
     }
 
     public function toggleEditGithub(): void
@@ -82,7 +88,54 @@ class StudentDashboard extends BaseDashboard
         $this->githubUsername = $trimmed;
         $this->editingGithub = false;
 
-        Notification::make()->title('GitHub username updated.')->success()->send();
+        // Backfill any previously unmatched lab grades
+        $backfill = app(BackfillLabGradesService::class)->backfillForStudent($student);
+
+        if ($backfill['grades_created'] > 0) {
+            Notification::make()
+                ->title('GitHub username updated.')
+                ->body($backfill['grades_created'].' lab grade(s) were automatically linked to your account.')
+                ->success()
+                ->send();
+        } else {
+            Notification::make()->title('GitHub username updated.')->success()->send();
+        }
+    }
+
+    public function toggleEditSex(): void
+    {
+        $this->editingSex = ! $this->editingSex;
+
+        if ($this->editingSex) {
+            $student = $this->getStudent();
+            $this->sex = $student?->gender ?? '';
+        }
+    }
+
+    public function saveSex(): void
+    {
+        $student = $this->getStudent();
+
+        if (! $student) {
+            return;
+        }
+
+        $value = trim($this->sex);
+
+        if (! in_array($value, ['Male', 'Female', ''])) {
+            Notification::make()
+                ->title('Please select a valid option.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $student->update(['gender' => $value ?: null]);
+        $this->sex = $value;
+        $this->editingSex = false;
+
+        Notification::make()->title('Sex updated.')->success()->send();
     }
 
     public function getViewData(): array

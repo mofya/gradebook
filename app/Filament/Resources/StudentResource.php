@@ -263,6 +263,11 @@ class StudentResource extends Resource
                             }
                         });
 
+                        $offering = CourseOffering::with(['course', 'semester.year'])->find($data['course_offering_id']);
+                        $offeringLabel = $offering
+                            ? $offering->course->code.' - '.$offering->course->name
+                            : '';
+
                         $message = "{$enrolled} students enrolled.";
                         if ($skipped > 0) {
                             $message .= " {$skipped} already enrolled (skipped).";
@@ -272,6 +277,13 @@ class StudentResource extends Resource
                             ->title($message)
                             ->success()
                             ->send();
+
+                        Notification::make()
+                            ->title('Bulk Enrollment Complete')
+                            ->icon('heroicon-o-academic-cap')
+                            ->body("{$message} Course: {$offeringLabel}")
+                            ->success()
+                            ->sendToDatabase(auth()->user());
                     })
                     ->deselectRecordsAfterCompletion(),
                 Actions\DeleteBulkAction::make()

@@ -101,6 +101,22 @@ class ImportLabGrades extends Page
                     ->required()
                     ->visible(fn () => ($this->data['assessmentId'] ?? null) === 'new'),
 
+                TextInput::make('newAssessmentWeight')
+                    ->label('Weight')
+                    ->helperText('Relative weight of this assessment within the group (e.g., 100).')
+                    ->numeric()
+                    ->default(100)
+                    ->required()
+                    ->visible(fn () => ($this->data['assessmentId'] ?? null) === 'new'),
+
+                TextInput::make('newAssessmentNormalizedTo')
+                    ->label('Normalized To')
+                    ->helperText('Maximum normalized score for this assessment (e.g., 100).')
+                    ->numeric()
+                    ->default(100)
+                    ->required()
+                    ->visible(fn () => ($this->data['assessmentId'] ?? null) === 'new'),
+
                 FileUpload::make('file')
                     ->label('Lab Grades CSV')
                     ->acceptedFileTypes(['text/csv', 'application/vnd.ms-excel', 'text/plain'])
@@ -235,13 +251,16 @@ class ImportLabGrades extends Page
 
         $maxSort = Assessment::where('assessment_group_id', $group->id)->max('sort_order') ?? 0;
 
+        $weight = (float) ($this->data['newAssessmentWeight'] ?? 100);
+        $normalizedTo = (float) ($this->data['newAssessmentNormalizedTo'] ?? 100);
+
         return Assessment::create([
             'name' => $name,
             'assessment_group_id' => $group->id,
             'course_id' => $courseOffering->course_id,
-            'weight' => 100,
+            'weight' => $weight,
             'max_raw_score' => 100,
-            'normalized_to' => 100,
+            'normalized_to' => $normalizedTo,
             'has_subsections' => true,
             'is_published' => false,
             'sort_order' => $maxSort + 1,

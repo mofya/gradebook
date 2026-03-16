@@ -43,6 +43,33 @@
                                     </button>
                                 @endif
                             </div>
+                            <div class="mt-1">
+                                @if($editingSex)
+                                    <form wire:submit="saveSex" class="flex items-center gap-2">
+                                        <span class="text-sm text-gray-400 dark:text-gray-500">Sex:</span>
+                                        <select
+                                            wire:model="sex"
+                                            class="h-7 rounded-md border-gray-300 bg-white px-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                                        >
+                                            <option value="">-- Select --</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                        </select>
+                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">Save</button>
+                                        <button type="button" wire:click="toggleEditSex" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Cancel</button>
+                                    </form>
+                                @elseif($student->gender)
+                                    <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+                                        <span>Sex:</span>
+                                        <span class="font-medium text-gray-600 dark:text-gray-300">{{ $student->gender }}</span>
+                                        <button wire:click="toggleEditSex" class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400">Edit</button>
+                                    </div>
+                                @else
+                                    <button wire:click="toggleEditSex" class="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                                        <span>+ Add sex</span>
+                                    </button>
+                                @endif
+                            </div>
                         </div>
                     </div>
                     @if($student->study_mode)
@@ -53,17 +80,33 @@
                 </div>
             </div>
 
-            {{-- GitHub Prompt --}}
-            @if(!$student->github_username)
-                <div class="rounded-xl bg-amber-50 ring-1 ring-amber-600/10 px-5 py-3 dark:bg-amber-500/5 dark:ring-amber-500/20">
-                    <div class="flex items-center justify-between gap-4">
-                        <p class="text-sm text-amber-800 dark:text-amber-200">
-                            Your GitHub username is not set. Lab grades are matched by GitHub username &mdash; add yours to ensure your grades are linked correctly.
-                        </p>
-                        <button wire:click="toggleEditGithub" class="shrink-0 rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600">
-                            Add now
-                        </button>
-                    </div>
+            {{-- Missing Info Prompts --}}
+            @if(!$student->github_username || !$student->gender)
+                <div class="space-y-3">
+                    @if(!$student->github_username)
+                        <div class="rounded-xl bg-amber-50 ring-1 ring-amber-600/10 px-5 py-3 dark:bg-amber-500/5 dark:ring-amber-500/20">
+                            <div class="flex items-center justify-between gap-4">
+                                <p class="text-sm text-amber-800 dark:text-amber-200">
+                                    Your GitHub username is not set. Lab grades are matched by GitHub username &mdash; add yours to ensure your grades are linked correctly.
+                                </p>
+                                <button wire:click="toggleEditGithub" class="shrink-0 rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600">
+                                    Add now
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+                    @if(!$student->gender)
+                        <div class="rounded-xl bg-blue-50 ring-1 ring-blue-600/10 px-5 py-3 dark:bg-blue-500/5 dark:ring-blue-500/20">
+                            <div class="flex items-center justify-between gap-4">
+                                <p class="text-sm text-blue-800 dark:text-blue-200">
+                                    Your sex is not set. This information is used for reporting purposes &mdash; please add it to your profile.
+                                </p>
+                                <button wire:click="toggleEditSex" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
+                                    Add now
+                                </button>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             @endif
 

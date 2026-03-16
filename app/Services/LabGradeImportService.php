@@ -9,6 +9,8 @@ use App\Models\Enrollment;
 use App\Models\GradeResult;
 use App\Models\Student;
 use App\Models\SubsectionScore;
+use App\Models\UnmatchedLabGrade;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class LabGradeImportService
@@ -156,48 +158,27 @@ class LabGradeImportService
                 }
 
                 if (! $enrollment) {
+                    // Store unmatched row for future auto-matching
+                    UnmatchedLabGrade::updateOrCreate(
+                        [
+                            'course_offering_id' => $courseOffering->id,
+                            'assessment_id' => $assessment->id,
+                            'github_username' => strtolower($githubUsername),
+                        ],
+                        [
+                            'row_data' => $row,
+                            'status' => 'pending',
+                            'matched_at' => null,
+                            'matched_student_id' => null,
+                        ]
+                    );
+
                     $stats['skipped']++;
 
                     continue;
                 }
 
-                $finalScore = (float) ($row['Final Score (%)'] ?? 0);
-
-                // Create or update grade result
-                $gradeResult = GradeResult::updateOrCreate(
-                    [
-                        'enrollment_id' => $enrollment->id,
-                        'assessment_id' => $assessment->id,
-                    ],
-                    [
-                        'raw_score' => $finalScore,
-                        'normalized_score' => $finalScore,
-                        'source' => 'lab_import',
-                        'student_feedback' => $this->buildStudentFeedback($row),
-                        'notes' => $row['Instructor Notes'] ?? null,
-                    ]
-                );
-
-                // Create subsection scores
-                foreach (static::SUBSECTION_COLUMNS as $columnName => $maxScore) {
-                    $subsection = $subsections->get($columnName);
-                    if (! $subsection) {
-                        continue;
-                    }
-
-                    $score = (float) ($row[$columnName] ?? 0);
-
-                    SubsectionScore::updateOrCreate(
-                        [
-                            'grade_result_id' => $gradeResult->id,
-                            'assessment_subsection_id' => $subsection->id,
-                        ],
-                        [
-                            'score' => $score,
-                        ]
-                    );
-                }
-
+                $this->importRow($enrollment, $assessment, $row, $subsections);
                 $stats['grades_imported']++;
             }
 
@@ -209,11 +190,70 @@ class LabGradeImportService
     }
 
     /**
+     * Import a single CSV row as a grade result for the given enrollment and assessment.
+     *
+     * @param  array<string, string>  $row
+     * @param  Collection<string, AssessmentSubsection>|null  $subsections
+     */
+    public function importRow(
+        Enrollment $enrollment,
+        Assessment $assessment,
+        array $row,
+        ?Collection $subsections = null,
+    ): GradeResult {
+        $subsections ??= $this->ensureSubsections($assessment);
+
+        $finalScore = (float) ($row['Final Score (%)'] ?? 0);
+
+        // Create or update grade result
+        $gradeResult = GradeResult::updateOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'assessment_id' => $assessment->id,
+            ],
+            [
+                'raw_score' => $finalScore,
+                'source' => 'lab_import',
+                'student_feedback' => $this->buildStudentFeedback($row),
+                'notes' => $row['Instructor Notes'] ?? null,
+            ]
+        );
+
+        // Calculate and store the properly normalized score
+        $normalized = $gradeResult->calculateNormalizedScore();
+        if ($normalized !== null) {
+            $gradeResult->updateQuietly(['normalized_score' => $normalized]);
+        }
+
+        // Create subsection scores
+        foreach (static::SUBSECTION_COLUMNS as $columnName => $maxScore) {
+            $subsection = $subsections->get($columnName);
+            if (! $subsection) {
+                continue;
+            }
+
+            $score = (float) ($row[$columnName] ?? 0);
+
+            SubsectionScore::updateOrCreate(
+                [
+                    'grade_result_id' => $gradeResult->id,
+                    'assessment_subsection_id' => $subsection->id,
+                ],
+                [
+                    'score' => $score,
+                ]
+            );
+        }
+
+        return $gradeResult;
+    }
+
+    /**
      * Ensure assessment subsections exist for the standard lab columns.
      *
-     * @return \Illuminate\Support\Collection<string, AssessmentSubsection>
+     * @return Collection<string, AssessmentSubsection>
      */
-    protected function ensureSubsections(Assessment $assessment): \Illuminate\Support\Collection
+    protected function ensureSubsections(Assessment $assessment): Collection
     {
         $subsections = collect();
         $sortOrder = 1;
@@ -239,6 +279,8 @@ class LabGradeImportService
 
     /**
      * Build the student-visible feedback text from a CSV row.
+     *
+     * @param  array<string, string>  $row
      */
     protected function buildStudentFeedback(array $row): ?string
     {

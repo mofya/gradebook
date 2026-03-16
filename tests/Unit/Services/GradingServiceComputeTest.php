@@ -57,7 +57,7 @@ class GradingServiceComputeTest extends TestCase
         ]);
     }
 
-    public function test_compute_ca_total_sums_normalized_scores_in_ca_groups(): void
+    public function test_compute_ca_total_uses_weighted_average_in_ca_groups(): void
     {
         $offering = $this->createOfferingWithGroups();
         $enrollment = $this->createEnrollment($offering);
@@ -73,30 +73,75 @@ class GradingServiceComputeTest extends TestCase
             'course_id' => $offering->course_id,
             'max_raw_score' => 50,
             'normalized_to' => 25,
+            'weight' => 25,
         ]);
         $a2 = Assessment::factory()->create([
             'assessment_group_id' => $caGroup->id,
             'course_id' => $offering->course_id,
             'max_raw_score' => 100,
             'normalized_to' => 25,
+            'weight' => 25,
         ]);
 
         GradeResult::factory()->create([
             'enrollment_id' => $enrollment->id,
             'assessment_id' => $a1->id,
             'raw_score' => 40,
-            'normalized_score' => 20.00, // 40/50 * 25 = 20
+            'normalized_score' => 20.00,
         ]);
         GradeResult::factory()->create([
             'enrollment_id' => $enrollment->id,
             'assessment_id' => $a2->id,
             'raw_score' => 80,
-            'normalized_score' => 20.00, // 80/100 * 25 = 20
+            'normalized_score' => 20.00,
         ]);
 
         $total = $this->gradingService->computeCaTotal($enrollment);
 
-        $this->assertEquals(40.00, $total);
+        // weighted avg: (40/50*100 * 25 + 80/100*100 * 25) / (25+25) = (80*25 + 80*25) / 50 = 80.0
+        $this->assertEquals(80.00, $total);
+    }
+
+    public function test_compute_ca_total_respects_different_weights(): void
+    {
+        $offering = $this->createOfferingWithGroups();
+        $enrollment = $this->createEnrollment($offering);
+
+        $caGroup = AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+        ]);
+
+        $a1 = Assessment::factory()->create([
+            'assessment_group_id' => $caGroup->id,
+            'course_id' => $offering->course_id,
+            'max_raw_score' => 100,
+            'weight' => 30,
+        ]);
+        $a2 = Assessment::factory()->create([
+            'assessment_group_id' => $caGroup->id,
+            'course_id' => $offering->course_id,
+            'max_raw_score' => 100,
+            'weight' => 70,
+        ]);
+
+        GradeResult::factory()->create([
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $a1->id,
+            'raw_score' => 100,
+            'normalized_score' => 100.00,
+        ]);
+        GradeResult::factory()->create([
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $a2->id,
+            'raw_score' => 50,
+            'normalized_score' => 50.00,
+        ]);
+
+        $total = $this->gradingService->computeCaTotal($enrollment);
+
+        // weighted avg: (100*30 + 50*70) / (30+70) = (3000 + 3500) / 100 = 65.0
+        $this->assertEquals(65.00, $total);
     }
 
     public function test_compute_ca_total_respects_ca_override(): void

@@ -152,12 +152,12 @@
                                                     </div>
                                                     @if($pct !== null)
                                                         <div class="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" role="progressbar" aria-valuenow="{{ $pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ $assessment['name'] }} score">
-                                                           <div class="h-full rounded-full {{ $barColor }}" style="width: {{ max(min($pct, 100), 2) }}%"></div>
+                                                            <div class="h-full rounded-full {{ $barColor }}" style="width: {{ max(min($pct, 100), 2) }}%"></div>
                                                         </div>
-                                                        @endif
-                                                        </div>
-                                                        </div>
-                                                        @endif
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @endif
                                     @endforeach
                                 </div>
 

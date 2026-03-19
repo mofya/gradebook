@@ -74,10 +74,6 @@ class GradeController extends Controller
             ->where('course_offering_id', $courseOffering->id)
             ->firstOrFail();
 
-        if (! $this->gradingService->isValidMark($validated['grade'])) {
-            return response()->json(['message' => 'Mark must be between 0 and 100.'], 422);
-        }
-
         $gradeResult = GradeResult::updateOrCreate(
             [
                 'enrollment_id' => $enrollment->id,

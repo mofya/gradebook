@@ -64,7 +64,8 @@ class OtpAuthService
         OtpCode::query()
             ->where('email', $email)
             ->whereNull('verified_at')
-            ->update(['verified_at' => now()]);
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now()]);
 
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
@@ -91,6 +92,7 @@ class OtpAuthService
         $otpCode = OtpCode::query()
             ->where('email', $email)
             ->whereNull('verified_at')
+            ->whereNull('revoked_at')
             ->latest()
             ->first();
 
@@ -119,20 +121,18 @@ class OtpAuthService
 
     public function ensureUserExists(Student $student): User
     {
-        $user = User::where('email', $student->email)->first();
+        $user = User::query()->where('email', $student->email)->first();
 
         if ($user) {
             return $user;
         }
 
-        $user = new User;
-        $user->name = "{$student->first_name} {$student->last_name}";
-        $user->email = $student->email;
-        $user->password = bcrypt(Str::random(64));
-        $user->role = Role::Student;
-        $user->email_verified_at = now();
-        $user->save();
-
-        return $user;
+        return User::forceCreate([
+            'name' => "{$student->first_name} {$student->last_name}",
+            'email' => $student->email,
+            'password' => Str::random(64),
+            'role' => Role::Student,
+            'email_verified_at' => now(),
+        ]);
     }
 }

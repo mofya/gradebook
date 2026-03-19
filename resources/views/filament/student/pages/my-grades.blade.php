@@ -38,12 +38,7 @@
                                     </div>
                                     <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{{ $course['semester'] }}</p>
                                 </div>
-                                <span class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium
-                                    {{ $course['status'] === 'completed' ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/30' : '' }}
-                                    {{ $course['status'] === 'enrolled' ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/30' : '' }}
-                                    {{ $course['status'] === 'withdrawn' ? 'bg-red-50 text-red-700 ring-1 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/30' : '' }}
-                                    {{ $course['status'] === 'deferred' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/30' : '' }}
-                                ">{{ ucfirst($course['status']) }}</span>
+                                <x-status-badge :status="$course['status']" />
                             </div>
                         </div>
 
@@ -76,11 +71,13 @@
                                             <div x-data="{ open: false }">
                                                 <button
                                                     @click="open = !open"
+                                                    :aria-expanded="open"
                                                     class="group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
                                                 >
                                                     <span
                                                         class="inline-block text-[10px] leading-none text-gray-400 transition-transform duration-200 shrink-0"
                                                         :class="open ? 'rotate-90' : ''"
+                                                        aria-hidden="true"
                                                     >&#9654;</span>
                                                     <div class="flex-1 min-w-0">
                                                         <div class="flex items-center justify-between gap-4">
@@ -96,7 +93,7 @@
                                                             </span>
                                                         </div>
                                                         @if($pct !== null)
-                                                            <div class="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                                            <div class="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" role="progressbar" aria-valuenow="{{ $pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ $assessment['name'] }} score">
                                                                 <div class="h-full rounded-full {{ $barColor }}" style="width: {{ max(min($pct, 100), 2) }}%"></div>
                                                             </div>
                                                         @endif
@@ -120,7 +117,7 @@
                                                             <div class="flex items-center justify-between gap-3 text-sm">
                                                                 <span class="text-gray-600 dark:text-gray-400 truncate">{{ $sub['name'] }}</span>
                                                                 <div class="flex items-center gap-2.5 shrink-0">
-                                                                    <div class="w-20 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                                                    <div class="w-20 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden" role="progressbar" aria-valuenow="{{ $subPct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ $sub['name'] }} score">
                                                                         <div class="h-full rounded-full {{ $subBar }}" style="width: {{ max(min($subPct, 100), 3) }}%"></div>
                                                                     </div>
                                                                     <span class="w-14 text-right font-medium tabular-nums text-gray-700 dark:text-gray-300">{{ number_format($sub['score'], 1) }}%</span>
@@ -154,13 +151,13 @@
                                                         </span>
                                                     </div>
                                                     @if($pct !== null)
-                                                        <div class="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                                                            <div class="h-full rounded-full {{ $barColor }}" style="width: {{ max(min($pct, 100), 2) }}%"></div>
+                                                        <div class="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" role="progressbar" aria-valuenow="{{ $pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ $assessment['name'] }} score">
+                                                           <div class="h-full rounded-full {{ $barColor }}" style="width: {{ max(min($pct, 100), 2) }}%"></div>
                                                         </div>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        @endif
+                                                        @endif
+                                                        </div>
+                                                        </div>
+                                                        @endif
                                     @endforeach
                                 </div>
 
@@ -191,19 +188,9 @@
                                             </div>
                                         </div>
                                         @if($course['ca_grade'])
-                                            @php
-                                                $gradeBg = match(true) {
-                                                    in_array($course['ca_grade'], ['A+', 'A']) => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/30',
-                                                    in_array($course['ca_grade'], ['B+', 'B']) => 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/30',
-                                                    in_array($course['ca_grade'], ['C+', 'C']) => 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/30',
-                                                    default => 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/30',
-                                                };
-                                            @endphp
                                             <div class="text-center shrink-0">
                                                 <p class="text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Grade</p>
-                                                <span class="inline-flex items-center justify-center rounded-lg px-3 py-1 text-lg font-bold ring-1 {{ $gradeBg }}">
-                                                    {{ $course['ca_grade'] }}
-                                                </span>
+                                                <x-grade-badge :grade="$course['ca_grade']" size="lg" />
                                             </div>
                                         @endif
                                     </div>

@@ -10,7 +10,7 @@
     @if($reportData)
         <div class="space-y-6 mt-6">
             {{-- Header with export --}}
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 dark:bg-gray-900 dark:ring-white/10">
                 <div class="flex items-center justify-between">
                     <div>
                         <h2 class="text-lg font-semibold text-gray-800 dark:text-white/90">{{ $reportData['course_code'] }} — {{ $reportData['course_name'] }}</h2>
@@ -24,45 +24,45 @@
 
             {{-- Statistics Cards --}}
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-2xl font-bold text-primary-600">{{ $reportData['stats']['total_enrolled'] }}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Enrolled</p>
                 </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ $reportData['stats']['average'] }}%</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Average</p>
                 </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ $reportData['stats']['pass_rate'] }}%</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Pass Rate</p>
                 </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ $reportData['stats']['median'] }}%</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Median</p>
                 </div>
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-lg font-bold text-emerald-600 dark:text-emerald-400">{{ $reportData['stats']['highest'] }}%</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Highest</p>
                 </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-lg font-bold text-red-600 dark:text-red-400">{{ $reportData['stats']['lowest'] }}%</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Lowest</p>
                 </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-lg font-bold text-amber-600 dark:text-amber-400">{{ number_format($reportData['stats']['std_deviation'], 2) }}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Std Dev</p>
                 </div>
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-lg font-bold text-gray-600 dark:text-gray-300">{{ $reportData['stats']['graded'] }}/{{ $reportData['stats']['total_enrolled'] }}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Graded</p>
                 </div>
             </div>
 
             {{-- Grade Distribution Chart --}}
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 dark:bg-gray-900 dark:ring-white/10">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90 mb-4">Grade Distribution</h3>
                 <div class="flex items-end gap-2 h-48">
                     @php
@@ -87,7 +87,7 @@
 
             {{-- Per-Assessment Stats --}}
             @if(count($reportData['assessment_stats'] ?? []) > 0)
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 dark:bg-gray-900 dark:ring-white/10">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90 mb-4">Per-Assessment Statistics</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full border-collapse text-sm">
@@ -119,13 +119,13 @@
             @endif
 
             {{-- Student Results Table --}}
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90 p-5 pb-0">Student Results</h3>
                 <div class="overflow-x-auto">
-                    <table class="w-full border-collapse text-sm mt-4">
+                    <table class="w-full min-w-[640px] border-collapse text-sm mt-4">
                         <thead>
                             <tr class="border-b border-gray-200 dark:border-gray-700">
-                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Student</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-400 sticky left-0 bg-white dark:bg-gray-900 z-10">Student</th>
                                 <th class="px-4 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-400">ID</th>
                                 <th class="px-4 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400">CA</th>
                                 <th class="px-4 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400">Exam</th>
@@ -138,7 +138,7 @@
                         <tbody>
                             @foreach($reportData['students'] as $student)
                                 <tr class="border-b border-gray-200 dark:border-gray-700">
-                                    <td class="px-4 py-3 text-gray-800 dark:text-white/90">{{ $student['name'] }}</td>
+                                    <td class="px-4 py-3 text-gray-800 dark:text-white/90 sticky left-0 bg-white dark:bg-gray-900 z-10">{{ $student['name'] }}</td>
                                     <td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ $student['student_id'] }}</td>
                                     <td class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{{ $student['ca_total'] !== null ? number_format($student['ca_total'], 1) : '-' }}</td>
                                     <td class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{{ $student['exam_score'] !== null ? number_format($student['exam_score'], 1) : '-' }}</td>
@@ -146,14 +146,7 @@
                                     <td class="px-4 py-3 text-center font-bold text-gray-800 dark:text-white/90">{{ $student['final_grade'] ?? '-' }}</td>
                                     <td class="px-4 py-3 text-center text-gray-600 dark:text-gray-400">{{ $student['grade_points'] !== null ? number_format($student['grade_points'], 1) : '-' }}</td>
                                     <td class="px-4 py-3 text-center">
-                                        <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
-                                            {{ $student['status'] === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-400' : '' }}
-                                            {{ $student['status'] === 'enrolled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400' : '' }}
-                                            {{ $student['status'] === 'withdrawn' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400' : '' }}
-                                            {{ $student['status'] === 'deferred' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400' : '' }}
-                                        ">
-                                            {{ ucfirst($student['status']) }}
-                                        </span>
+                                        <x-status-badge :status="$student['status']" />
                                     </td>
                                 </tr>
                             @endforeach

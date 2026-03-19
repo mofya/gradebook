@@ -227,15 +227,26 @@ class StudentResource extends Resource
                     ->form([
                         Forms\Components\Select::make('course_offering_id')
                             ->label('Course Offering')
-                            ->options(
-                                CourseOffering::query()
+                            ->searchable()
+                            ->getSearchResultsUsing(function (string $search): array {
+                                return CourseOffering::query()
                                     ->with(['course', 'semester.year'])
+                                    ->whereHas('course', fn ($q) => $q->where('code', 'like', "%{$search}%")->orWhere('name', 'like', "%{$search}%"))
+                                    ->orWhereHas('semester', fn ($q) => $q->where('name', 'like', "%{$search}%"))
+                                    ->limit(50)
                                     ->get()
                                     ->mapWithKeys(fn (CourseOffering $offering) => [
                                         $offering->id => $offering->course->code.' - '.$offering->course->name.' ('.$offering->semester->year->name.', '.$offering->semester->name.')',
                                     ])
-                            )
-                            ->searchable()
+                                    ->all();
+                            })
+                            ->getOptionLabelUsing(function ($value): ?string {
+                                $offering = CourseOffering::with(['course', 'semester.year'])->find($value);
+
+                                return $offering
+                                    ? $offering->course->code.' - '.$offering->course->name.' ('.$offering->semester->year->name.', '.$offering->semester->name.')'
+                                    : null;
+                            })
                             ->required(),
                     ])
                     ->action(function (Collection $records, array $data): void {

@@ -9,6 +9,7 @@ use App\Models\Student;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Collection;
 
 class GradeQueries extends Page
 {
@@ -69,7 +70,7 @@ class GradeQueries extends Page
         $this->showCreateForm = ! $this->showCreateForm;
     }
 
-    public function getAssessmentsForEnrollmentProperty(): \Illuminate\Support\Collection
+    public function getAssessmentsForEnrollmentProperty(): Collection
     {
         if (! $this->selectedEnrollmentId) {
             return collect();
@@ -87,12 +88,22 @@ class GradeQueries extends Page
 
     public function submitQuery(): void
     {
+        $this->validate([
+            'selectedEnrollmentId' => ['required', 'exists:enrollments,id'],
+            'querySubject' => ['required', 'string', 'min:3', 'max:255'],
+            'queryBody' => ['required', 'string', 'min:10'],
+        ], [
+            'selectedEnrollmentId.required' => 'Please select a course.',
+            'querySubject.required' => 'A subject is required.',
+            'querySubject.min' => 'Subject must be at least 3 characters.',
+            'queryBody.required' => 'A message is required.',
+            'queryBody.min' => 'Message must be at least 10 characters.',
+        ]);
+
         $user = auth()->user();
         $student = Student::where('email', $user->email)->first();
 
-        if (! $student || ! $this->selectedEnrollmentId || ! $this->querySubject || ! $this->queryBody) {
-            Notification::make()->title('Please fill in all required fields.')->danger()->send();
-
+        if (! $student) {
             return;
         }
 
@@ -119,9 +130,15 @@ class GradeQueries extends Page
 
     public function submitReply(): void
     {
+        $this->validate([
+            'replyBody' => ['required', 'string', 'min:1'],
+        ], [
+            'replyBody.required' => 'Reply message cannot be empty.',
+        ]);
+
         $user = auth()->user();
 
-        if (! $this->replyingToQueryId || ! $this->replyBody) {
+        if (! $this->replyingToQueryId) {
             return;
         }
 

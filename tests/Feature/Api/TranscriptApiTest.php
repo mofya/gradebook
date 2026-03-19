@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Api;
 
-use App\Models\Assessment;
 use App\Models\Course;
-use App\Models\Grade;
+use App\Models\CourseOffering;
+use App\Models\Enrollment;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\Year;
@@ -20,15 +20,18 @@ class TranscriptApiTest extends TestCase
         $user = User::factory()->admin()->create();
         $year = Year::factory()->create();
         $course = Course::factory()->create(['year_id' => $year->id, 'credits' => 3]);
-        $assessment = Assessment::factory()->create(['course_id' => $course->id, 'weight' => 100]);
-        $student = Student::factory()->create();
-        $student->courses()->attach($course->id);
-
-        Grade::factory()->create([
-            'student_id' => $student->id,
+        $courseOffering = CourseOffering::factory()->create([
             'course_id' => $course->id,
-            'assessment_id' => $assessment->id,
-            'grade' => 75,
+            'is_published' => true,
+        ]);
+        $student = Student::factory()->create();
+
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $courseOffering->id,
+            'final_total' => 75,
+            'final_grade' => 'B+',
+            'grade_points' => 3.5,
         ]);
 
         $response = $this->actingAs($user, 'sanctum')

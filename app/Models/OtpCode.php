@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Database\Factories\OtpCodeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class OtpCode extends Model
 {
-    /** @use HasFactory<\Database\Factories\OtpCodeFactory> */
+    /** @use HasFactory<OtpCodeFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -16,6 +17,7 @@ class OtpCode extends Model
         'attempts',
         'expires_at',
         'verified_at',
+        'revoked_at',
     ];
 
     protected function casts(): array
@@ -23,6 +25,7 @@ class OtpCode extends Model
         return [
             'expires_at' => 'datetime',
             'verified_at' => 'datetime',
+            'revoked_at' => 'datetime',
         ];
     }
 

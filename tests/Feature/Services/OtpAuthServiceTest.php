@@ -68,6 +68,7 @@ class OtpAuthServiceTest extends TestCase
         $activeCount = OtpCode::query()
             ->where('email', 'test@example.com')
             ->whereNull('verified_at')
+            ->whereNull('revoked_at')
             ->count();
 
         $this->assertEquals(1, $activeCount);

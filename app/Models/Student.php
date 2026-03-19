@@ -24,24 +24,4 @@ class Student extends Model
             ->withPivot('academic_year', 'semester')
             ->withTimestamps();
     }
-
-    public function grades(): HasMany
-    {
-        return $this->hasMany(Grade::class);
-    }
-
-    public function totalGradeForCourse(int $courseId): ?float
-    {
-        $grades = $this->grades()->where('course_id', $courseId)->with('assessment')->get();
-        $totalWeight = 0;
-        $weightedGrade = 0;
-
-        foreach ($grades as $grade) {
-            $weight = $grade->assessment->weight;
-            $weightedGrade += $grade->grade * ($weight / 100);
-            $totalWeight += $weight;
-        }
-
-        return $totalWeight > 0 ? ($weightedGrade / ($totalWeight / 100)) : null;
-    }
 }

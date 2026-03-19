@@ -33,6 +33,16 @@ class GradingService
      */
     public function getLetterGrade(float $mark): string
     {
+        try {
+            $defaultScheme = GradingScheme::getDefault();
+        } catch (\Throwable) {
+            $defaultScheme = null;
+        }
+
+        if ($defaultScheme) {
+            return $defaultScheme->getLetterGrade($mark);
+        }
+
         $mark = round($mark);
 
         foreach (self::GRADING_SCALE as $range) {
@@ -49,6 +59,16 @@ class GradingService
      */
     public function getGradePoints(float $mark): float
     {
+        try {
+            $defaultScheme = GradingScheme::getDefault();
+        } catch (\Throwable) {
+            $defaultScheme = null;
+        }
+
+        if ($defaultScheme) {
+            return $defaultScheme->getGradePoints($mark);
+        }
+
         $mark = round($mark);
 
         foreach (self::GRADING_SCALE as $range) {

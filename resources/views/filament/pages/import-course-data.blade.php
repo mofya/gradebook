@@ -23,7 +23,7 @@
 
         {{-- Step 1-2: Form (Select + FileUpload) --}}
         @if($currentStep <= 2)
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 dark:bg-gray-900 dark:ring-white/10">
                 <div class="flex items-start justify-between mb-4">
                     <div>
                         <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90 mb-1">Upload Course Data</h3>
@@ -73,7 +73,7 @@
                     }
                 }
             @endphp
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
                 <div class="p-5 pb-0">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Column Mapping</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -183,7 +183,7 @@
 
         {{-- Step 4: Weight Configuration --}}
         @if($currentStep === 4)
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
                 <div class="p-5 pb-0">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Assessment Weight Configuration</h3>
                     <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -257,7 +257,7 @@
         {{-- Step 5: Results --}}
         @if($currentStep === 5)
             <div class="space-y-4">
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 dark:bg-gray-900 dark:ring-white/10">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90 mb-4">Import Results</h3>
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -296,7 +296,7 @@
                 </div>
 
                 @if(!empty($importResults['errors']))
-                    <div class="rounded-2xl border border-red-200 bg-red-50 p-5 dark:border-red-800 dark:bg-red-900/20">
+                    <div class="rounded-xl bg-red-50 ring-1 ring-red-600/10 p-5 dark:bg-red-500/5 dark:ring-red-500/20">
                         <h4 class="text-sm font-semibold text-red-700 dark:text-red-400 mb-2">Errors ({{ count($importResults['errors']) }})</h4>
                         <ul class="list-disc list-inside text-sm text-red-600 dark:text-red-400 space-y-1">
                             @foreach(array_slice($importResults['errors'], 0, 20) as $error)

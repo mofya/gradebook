@@ -1,6 +1,6 @@
 <x-filament-panels::page>
     @if($student)
-        <div class="space-y-6">
+        <div class="space-y-6" wire:loading.class="opacity-50 pointer-events-none" wire:target="saveGithubUsername, saveSex, toggleEditGithub, toggleEditSex">
             {{-- Profile Card --}}
             <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 p-5">
                 <div class="flex items-start justify-between gap-4">
@@ -28,8 +28,11 @@
                                             placeholder="your-github-username"
                                             autofocus
                                         >
-                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">Save</button>
-                                        <button type="button" wire:click="toggleEditGithub" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Cancel</button>
+                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400" wire:loading.attr="disabled">
+                                            <span wire:loading.remove wire:target="saveGithubUsername">Save</span>
+                                            <span wire:loading wire:target="saveGithubUsername">Saving...</span>
+                                        </button>
+                                        <button type="button" wire:click="toggleEditGithub" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" wire:loading.attr="disabled" wire:target="saveGithubUsername">Cancel</button>
                                     </form>
                                 @elseif($student->github_username)
                                     <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
@@ -55,10 +58,13 @@
                                             <option value="Male">Male</option>
                                             <option value="Female">Female</option>
                                         </select>
-                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">Save</button>
-                                        <button type="button" wire:click="toggleEditSex" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Cancel</button>
+                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400" wire:loading.attr="disabled">
+                                            <span wire:loading.remove wire:target="saveSex">Save</span>
+                                            <span wire:loading wire:target="saveSex">Saving...</span>
+                                        </button>
+                                        <button type="button" wire:click="toggleEditSex" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" wire:loading.attr="disabled" wire:target="saveSex">Cancel</button>
                                     </form>
-                                @elseif($student->gender)
+                                @elseif($student->gender && $student->gender !== '')
                                     <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
                                         <span>Sex:</span>
                                         <span class="font-medium text-gray-600 dark:text-gray-300">{{ $student->gender }}</span>
@@ -81,7 +87,7 @@
             </div>
 
             {{-- Missing Info Prompts --}}
-            @if(!$student->github_username || !$student->gender)
+            @if(!$student->github_username || !$student->gender || $student->gender === '')
                 <div class="space-y-3">
                     @if(!$student->github_username)
                         <div class="rounded-xl bg-amber-50 ring-1 ring-amber-600/10 px-5 py-3 dark:bg-amber-500/5 dark:ring-amber-500/20">
@@ -95,7 +101,7 @@
                             </div>
                         </div>
                     @endif
-                    @if(!$student->gender)
+                    @if(!$student->gender || $student->gender === '')
                         <div class="rounded-xl bg-blue-50 ring-1 ring-blue-600/10 px-5 py-3 dark:bg-blue-500/5 dark:ring-blue-500/20">
                             <div class="flex items-center justify-between gap-4">
                                 <p class="text-sm text-blue-800 dark:text-blue-200">
@@ -143,7 +149,7 @@
                 <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 p-5">
                     <p class="text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Open Queries</p>
                     <p class="mt-1 text-2xl font-bold tabular-nums {{ $openQueries > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-950 dark:text-white' }}">{{ $openQueries }}</p>
-                    <a href="{{ url('/student/grade-queries') }}" class="mt-0.5 inline-block text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">View queries &rarr;</a>
+                    <a href="{{ route('filament.student.pages.grade-queries') }}" class="mt-0.5 inline-block text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">View queries &rarr;</a>
                 </div>
             </div>
 
@@ -154,13 +160,6 @@
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         @foreach($courseCards as $course)
                             @php
-                                $gradeBg = match(true) {
-                                    $course['ca_grade'] === null => 'bg-gray-50 text-gray-400 ring-gray-600/10 dark:bg-gray-800 dark:text-gray-500 dark:ring-gray-500/20',
-                                    in_array($course['ca_grade'], ['A+', 'A']) => 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/30',
-                                    in_array($course['ca_grade'], ['B+', 'B']) => 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-400 dark:ring-blue-500/30',
-                                    in_array($course['ca_grade'], ['C+', 'C']) => 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/30',
-                                    default => 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/30',
-                                };
                                 $statusColor = match($course['status']) {
                                     'completed' => 'text-emerald-600 dark:text-emerald-400',
                                     'enrolled' => 'text-blue-600 dark:text-blue-400',
@@ -187,9 +186,7 @@
                                             @endif
                                         </p>
                                     </div>
-                                    <span class="inline-flex items-center justify-center rounded-lg px-2.5 py-1 text-base font-bold ring-1 shrink-0 {{ $gradeBg }}">
-                                        {{ $course['ca_grade'] ?? '—' }}
-                                    </span>
+                                    <x-grade-badge :grade="$course['ca_grade']" class="shrink-0" />
                                 </div>
                             </div>
                         @endforeach

@@ -22,6 +22,8 @@ class StudentDashboard extends BaseDashboard
 
     public bool $editingSex = false;
 
+    protected ?Student $cachedStudent = null;
+
     public function mount(): void
     {
         $student = $this->getStudent();
@@ -52,6 +54,7 @@ class StudentDashboard extends BaseDashboard
 
         if ($trimmed === '') {
             $student->update(['github_username' => null]);
+            $this->clearStudentCache();
             $this->editingGithub = false;
 
             Notification::make()->title('GitHub username removed.')->success()->send();
@@ -85,6 +88,7 @@ class StudentDashboard extends BaseDashboard
         }
 
         $student->update(['github_username' => $trimmed]);
+        $this->clearStudentCache();
         $this->githubUsername = $trimmed;
         $this->editingGithub = false;
 
@@ -132,6 +136,7 @@ class StudentDashboard extends BaseDashboard
         }
 
         $student->update(['gender' => $value ?: null]);
+        $this->clearStudentCache();
         $this->sex = $value;
         $this->editingSex = false;
 
@@ -211,6 +216,15 @@ class StudentDashboard extends BaseDashboard
 
     protected function getStudent(): ?Student
     {
-        return Student::where('email', auth()->user()->email)->first();
+        if ($this->cachedStudent === null) {
+            $this->cachedStudent = Student::where('email', auth()->user()->email)->first();
+        }
+
+        return $this->cachedStudent;
+    }
+
+    protected function clearStudentCache(): void
+    {
+        $this->cachedStudent = null;
     }
 }

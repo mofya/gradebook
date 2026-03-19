@@ -4,78 +4,46 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Student;
-use App\Services\GradingService;
 use App\Services\TranscriptService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class TranscriptController extends Controller
 {
+    use AuthorizesRequests;
+
     public function __construct(
-        protected GradingService $gradingService
+        protected TranscriptService $transcriptService
     ) {}
 
     /**
-     * Get transcript data for a student (JSON for now, PDF in Phase 4).
+     * Get transcript data for a student (JSON).
      */
-    public function show(Request $request, Student $student): JsonResponse
+    public function show(Student $student): JsonResponse
     {
-        $this->authorizeStudentAccess($request, $student);
+        $this->authorize('viewTranscript', $student);
 
-        $student->load(['courses.department', 'grades.assessment', 'grades.course']);
-
-        $courseResults = [];
-
-        foreach ($student->courses as $course) {
-            $totalMark = $student->totalGradeForCourse($course->id);
-            $courseResults[] = [
-                'course_code' => $course->code,
-                'course_name' => $course->name,
-                'credits' => $course->credits,
-                'mark' => $totalMark !== null ? round($totalMark, 2) : null,
-                'letter_grade' => $totalMark !== null ? $this->gradingService->getLetterGrade($totalMark) : null,
-                'grade_points' => $totalMark !== null ? $this->gradingService->getGradePoints($totalMark) : null,
-            ];
-        }
-
-        $gradedResults = array_filter($courseResults, fn ($r) => $r['mark'] !== null);
-        $gpaInput = array_map(fn ($r) => ['mark' => $r['mark'], 'credits' => $r['credits']], $gradedResults);
-        $cgpa = $this->gradingService->calculateCumulativeGpa($gpaInput);
+        $data = $this->transcriptService->generateTranscriptData($student);
 
         return response()->json([
             'student' => [
-                'id' => $student->id,
-                'name' => $student->first_name.' '.$student->last_name,
-                'email' => $student->email,
+                'id' => $data['student']->id,
+                'name' => $data['student']->first_name.' '.$data['student']->last_name,
+                'email' => $data['student']->email,
             ],
-            'courses' => $courseResults,
-            'cumulative_gpa' => $cgpa,
+            'courses' => $data['courses'],
+            'cumulative_gpa' => $data['cumulative_gpa'],
         ]);
     }
 
     /**
      * Download a PDF transcript for a student.
      */
-    public function download(Request $request, Student $student): Response
+    public function download(Student $student): Response
     {
-        $this->authorizeStudentAccess($request, $student);
+        $this->authorize('viewTranscript', $student);
 
-        return app(TranscriptService::class)->downloadPdf($student);
-    }
-
-    /**
-     * Verify the requesting user has access to this student's data.
-     */
-    protected function authorizeStudentAccess(Request $request, Student $student): void
-    {
-        $user = $request->user();
-
-        if ($user->isStudent()) {
-            $ownStudent = Student::query()->where('email', $user->email)->first();
-            if (! $ownStudent || $ownStudent->id !== $student->id) {
-                abort(403, 'You can only access your own transcript.');
-            }
-        }
+        return $this->transcriptService->downloadPdf($student);
     }
 }

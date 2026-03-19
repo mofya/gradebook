@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Assessment;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
+use App\Models\GradeResult;
 use Illuminate\Support\Collection;
 
 class ReportingService
@@ -105,11 +107,34 @@ class ReportingService
 
         $courseOffering->load(['assessmentGroups.assessments']);
 
+        $assessmentIds = $courseOffering->assessmentGroups
+            ->flatMap(fn ($group) => $group->assessments->pluck('id'))
+            ->all();
+
+        $allResults = GradeResult::query()
+            ->whereIn('assessment_id', $assessmentIds)
+            ->whereHas('enrollment', fn ($q) => $q->where('course_offering_id', $courseOffering->id))
+            ->where('is_excused', false)
+            ->whereNotNull('raw_score')
+            ->get(['assessment_id', 'raw_score'])
+            ->groupBy('assessment_id');
+
         $assessmentStats = [];
 
         foreach ($courseOffering->assessmentGroups as $group) {
             foreach ($group->assessments as $assessment) {
-                $assessmentStats[] = $this->getAssessmentStats($courseOffering, $assessment);
+                $results = ($allResults->get($assessment->id) ?? collect())
+                    ->pluck('raw_score')
+                    ->map(fn ($s) => (float) $s);
+
+                $assessmentStats[] = [
+                    'assessment_name' => $assessment->name,
+                    'count' => $results->count(),
+                    'average' => $results->isNotEmpty() ? round($results->avg(), 2) : 0,
+                    'highest' => $results->isNotEmpty() ? round($results->max(), 2) : 0,
+                    'lowest' => $results->isNotEmpty() ? round($results->min(), 2) : 0,
+                    'max_raw_score' => (float) $assessment->max_raw_score,
+                ];
             }
         }
 
@@ -123,9 +148,9 @@ class ReportingService
      *
      * @return array<string, mixed>
      */
-    public function getAssessmentStats(CourseOffering $courseOffering, \App\Models\Assessment $assessment): array
+    public function getAssessmentStats(CourseOffering $courseOffering, Assessment $assessment): array
     {
-        $results = \App\Models\GradeResult::query()
+        $results = GradeResult::query()
             ->where('assessment_id', $assessment->id)
             ->whereHas('enrollment', fn ($q) => $q->where('course_offering_id', $courseOffering->id))
             ->where('is_excused', false)

@@ -41,4 +41,18 @@ class StudentPolicy
     {
         return $user->isAdmin();
     }
+
+    public function viewGrades(User $user, Student $student): bool
+    {
+        if ($user->isAdmin() || $user->isLecturer()) {
+            return true;
+        }
+
+        return $user->isStudent() && $user->email === $student->email;
+    }
+
+    public function viewTranscript(User $user, Student $student): bool
+    {
+        return $this->viewGrades($user, $student);
+    }
 }

@@ -3,7 +3,7 @@
         {{ $this->form }}
 
         @if($reportData)
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-800">
+            <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 dark:bg-gray-900 dark:ring-white/10">
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-white/90">
                     {{ $reportData['course_code'] }} — {{ $reportData['course_name'] }}
                 </h2>
@@ -11,7 +11,7 @@
             </div>
 
             @forelse($reportData['analysis'] as $gender => $data)
-                <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
                     <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
                         <h3 class="font-semibold text-gray-800 dark:text-white/90">{{ $gender }}</h3>
                     </div>
@@ -73,7 +73,7 @@
                     </div>
                 </div>
             @empty
-                <div class="rounded-2xl border border-gray-200 bg-white p-5 text-center dark:border-gray-700 dark:bg-gray-800">
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 p-5 text-center dark:bg-gray-900 dark:ring-white/10">
                     <p class="text-sm text-gray-500 dark:text-gray-400">No enrollment data available.</p>
                 </div>
             @endforelse

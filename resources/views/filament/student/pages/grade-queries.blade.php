@@ -28,6 +28,7 @@
                                         <option value="{{ $enrollment->id }}">{{ $enrollment->courseOffering->course->code }} - {{ $enrollment->courseOffering->course->name }}</option>
                                     @endforeach
                                 </select>
+                                @error('selectedEnrollmentId') <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p> @enderror
                             </div>
 
                             @if($selectedEnrollmentId)
@@ -46,15 +47,20 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
                             <input type="text" wire:model="querySubject" class="w-full rounded-lg border-gray-300 bg-white text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" placeholder="Brief description of your query">
+                            @error('querySubject') <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p> @enderror
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
                             <textarea wire:model="queryBody" rows="4" class="w-full rounded-lg border-gray-300 bg-white text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" placeholder="Describe your grade query in detail..."></textarea>
+                            @error('queryBody') <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p> @enderror
                         </div>
 
                         <div class="flex items-center gap-3 pt-1">
-                            <x-filament::button type="submit">Submit Query</x-filament::button>
+                            <x-filament::button type="submit" wire:loading.attr="disabled" wire:target="submitQuery">
+                                <span wire:loading.remove wire:target="submitQuery">Submit Query</span>
+                                <span wire:loading wire:target="submitQuery">Submitting...</span>
+                            </x-filament::button>
                             <x-filament::button color="gray" wire:click="toggleCreateForm">Cancel</x-filament::button>
                         </div>
                     </form>
@@ -176,6 +182,7 @@
                                                 </div>
                                                 <div class="flex-1 space-y-2">
                                                     <textarea wire:model="replyBody" rows="2" class="w-full rounded-lg border-gray-300 bg-white text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white" placeholder="Type your reply..."></textarea>
+                                                    @error('replyBody') <p class="text-xs text-red-600 dark:text-red-400">{{ $message }}</p> @enderror
                                                     <div class="flex items-center gap-2">
                                                         <x-filament::button type="submit" size="sm">Send Reply</x-filament::button>
                                                         <x-filament::button color="gray" size="sm" wire:click="$set('replyingToQueryId', null)">Cancel</x-filament::button>

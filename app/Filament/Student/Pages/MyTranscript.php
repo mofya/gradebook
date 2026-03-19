@@ -7,12 +7,13 @@ use App\Models\Student;
 use App\Services\GradingService;
 use App\Services\TranscriptService;
 use BackedEnum;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Filament\Pages\Page;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MyTranscript extends Page
 {
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = true;
 
     protected string $view = 'filament.student.pages.my-transcript';
 
@@ -80,7 +81,7 @@ class MyTranscript extends Page
         $filename = 'transcript_'.$student->student_id_number.'_'.now()->format('Ymd').'.pdf';
 
         return response()->streamDownload(function () use ($data) {
-            echo \Barryvdh\DomPDF\Facade\Pdf::loadView('transcripts.pdf', $data)->output();
+            echo Pdf::loadView('transcripts.pdf', $data)->output();
         }, $filename);
     }
 }

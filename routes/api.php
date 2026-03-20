@@ -35,5 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('role:admin,lecturer');
         Route::get('/offerings/{offering}/grades', [OfferingController::class, 'grades'])
             ->middleware('role:admin,lecturer');
+        Route::post('/offerings/{offering}/lab-grades', [OfferingController::class, 'importLabGrades'])
+            ->middleware('role:admin,lecturer');
+        Route::get('/offerings/{offering}/students/{identifier}/grades', [OfferingController::class, 'studentGrades'])
+            ->middleware('role:admin,lecturer');
     });
 });

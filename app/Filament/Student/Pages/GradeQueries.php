@@ -39,9 +39,7 @@ class GradeQueries extends Page
     {
         $user = auth()->user();
 
-        $student = Student::query()
-            ->where('email', $user->email)
-            ->first();
+        $student = Student::findByEmail($user->email);
 
         if (! $student) {
             return ['queries' => collect(), 'student' => null, 'enrollments' => collect()];
@@ -101,7 +99,7 @@ class GradeQueries extends Page
         ]);
 
         $user = auth()->user();
-        $student = Student::where('email', $user->email)->first();
+        $student = Student::findByEmail($user->email);
 
         if (! $student) {
             return;

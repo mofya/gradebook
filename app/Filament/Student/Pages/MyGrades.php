@@ -23,9 +23,7 @@ class MyGrades extends Page
         $user = auth()->user();
         $gradingService = app(GradingService::class);
 
-        $student = Student::query()
-            ->where('email', $user->email)
-            ->first();
+        $student = Student::findByEmail($user->email);
 
         if (! $student) {
             return ['courses' => collect(), 'student' => null];

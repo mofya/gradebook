@@ -3,12 +3,14 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Student\Pages\Auth\OtpLogin;
+use App\Filament\Student\Pages\Auth\StudentRegistration;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Width;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -26,6 +28,8 @@ class StudentPanelProvider extends PanelProvider
             ->path('student')
             ->viteTheme('resources/css/filament/student/theme.css')
             ->login(OtpLogin::class)
+            ->registration(StudentRegistration::class)
+            ->maxContentWidth(Width::Full)
             ->colors([
                 'primary' => Color::Blue,
             ])

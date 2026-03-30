@@ -2,6 +2,7 @@
 
 namespace App\Filament\Student\Pages\Auth;
 
+use App\Models\Student;
 use App\Services\OtpAuthService;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use DanHarrin\LivewireRateLimiting\WithRateLimiting;
@@ -18,19 +19,30 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 /**
  * @property-read Schema $form
+ * @property-read Schema $passwordForm
  * @property-read Schema $otpForm
  */
 class OtpLogin extends SimplePage
 {
     use WithRateLimiting;
 
+    /**
+     * Step 1: identifier input
+     * Step 2: password login (for registered students)
+     * Step 3: OTP verification
+     */
     public int $step = 1;
 
     public ?string $studentEmail = null;
+
+    public ?int $studentId = null;
+
+    public bool $studentHasPassword = false;
 
     /**
      * @var array<string, mixed> | null
@@ -82,27 +94,93 @@ class OtpLogin extends SimplePage
             ]);
         }
 
-        $this->studentEmail = $student->email;
-        $this->step = 2;
-        $this->otpForm->fill();
+        $this->studentId = $student->id;
+        $this->studentEmail = $student->preferredEmail();
+        $this->studentHasPassword = $student->isRegistered();
 
-        if ($otpService->canResend($student->email)) {
-            $code = $otpService->generateOtp($student->email);
-            $otpService->sendOtp($student->email, $code);
+        // Bind the resolved student to the session so loginWithPassword/verifyOtp
+        // cannot be tricked into authenticating a different student
+        session()->put('login-student-id', $student->id);
+
+        // If student has a password, show password form first
+        if ($this->studentHasPassword) {
+            $this->step = 2;
+            $this->passwordForm->fill();
+
+            return;
         }
 
-        Notification::make()
-            ->title('Verification code sent to your email.')
-            ->success()
-            ->send();
+        // Otherwise, go straight to OTP
+        $this->sendOtpToStudent($student, $otpService);
+        $this->step = 3;
+        $this->otpForm->fill();
+    }
+
+    public function loginWithPassword(): ?LoginResponse
+    {
+        try {
+            $this->rateLimit(5);
+        } catch (TooManyRequestsException $exception) {
+            Notification::make()
+                ->title("Too many requests. Please wait {$exception->secondsUntilAvailable} seconds.")
+                ->danger()
+                ->send();
+
+            return null;
+        }
+
+        $data = $this->passwordForm->getState();
+
+        $student = $this->getSessionStudent();
+
+        if (! $student || ! Hash::check($data['password'], $student->password)) {
+            throw ValidationException::withMessages([
+                'data.password' => 'Incorrect password.',
+            ]);
+        }
+
+        $otpService = app(OtpAuthService::class);
+        $user = $otpService->ensureUserExists($student);
+
+        session()->forget('login-student-id');
+        Filament::auth()->login($user);
+        session()->regenerate();
+
+        return app(LoginResponse::class);
+    }
+
+    public function switchToOtp(): void
+    {
+        $student = $this->getSessionStudent();
+
+        if (! $student) {
+            $this->goBack();
+
+            return;
+        }
+
+        $otpService = app(OtpAuthService::class);
+        $this->sendOtpToStudent($student, $otpService);
+        $this->step = 3;
+        $this->otpForm->fill();
     }
 
     public function verifyOtp(): ?LoginResponse
     {
         $data = $this->otpForm->getState();
 
+        $student = $this->getSessionStudent();
+
+        if (! $student) {
+            $this->goBack();
+
+            return null;
+        }
+
         $otpService = app(OtpAuthService::class);
-        $result = $otpService->verifyOtp($this->studentEmail, $data['code']);
+
+        // Verify against the session-bound student's preferred email, not client state
+        $result = $otpService->verifyOtp($student->preferredEmail(), $data['code']);
 
         if (! $result['success']) {
             throw ValidationException::withMessages([
@@ -110,9 +188,9 @@ class OtpLogin extends SimplePage
             ]);
         }
 
-        $student = $otpService->resolveStudent($this->studentEmail);
         $user = $otpService->ensureUserExists($student);
 
+        session()->forget('login-student-id');
         Filament::auth()->login($user);
         session()->regenerate();
 
@@ -121,9 +199,35 @@ class OtpLogin extends SimplePage
 
     public function goBack(): void
     {
+        session()->forget('login-student-id');
         $this->step = 1;
         $this->studentEmail = null;
+        $this->studentId = null;
+        $this->studentHasPassword = false;
         $this->form->fill();
+    }
+
+    protected function getSessionStudent(): ?Student
+    {
+        $sessionStudentId = session()->get('login-student-id');
+
+        return $sessionStudentId ? Student::find($sessionStudentId) : null;
+    }
+
+    protected function sendOtpToStudent(Student $student, OtpAuthService $otpService): void
+    {
+        $email = $student->preferredEmail();
+        $this->studentEmail = $email;
+
+        if ($otpService->canResend($email)) {
+            $code = $otpService->generateOtp($email);
+            $otpService->sendOtp($email, $code);
+        }
+
+        Notification::make()
+            ->title('Verification code sent to your email.')
+            ->success()
+            ->send();
     }
 
     public function defaultForm(Schema $schema): Schema
@@ -142,6 +246,26 @@ class OtpLogin extends SimplePage
                     ->required()
                     ->autofocus()
                     ->autocomplete('email'),
+            ]);
+    }
+
+    public function defaultPasswordForm(Schema $schema): Schema
+    {
+        return $schema
+            ->statePath('data');
+    }
+
+    public function passwordForm(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                TextInput::make('password')
+                    ->label('Password')
+                    ->password()
+                    ->revealable()
+                    ->required()
+                    ->autofocus()
+                    ->autocomplete('current-password'),
             ]);
     }
 
@@ -170,6 +294,7 @@ class OtpLogin extends SimplePage
         return $schema
             ->components([
                 $this->getIdentifierFormContentComponent(),
+                $this->getPasswordFormContentComponent(),
                 $this->getOtpFormContentComponent(),
             ]);
     }
@@ -187,6 +312,19 @@ class OtpLogin extends SimplePage
             ->visible(fn (): bool => $this->step === 1);
     }
 
+    public function getPasswordFormContentComponent(): Component
+    {
+        return Form::make([EmbeddedSchema::make('passwordForm')])
+            ->id('passwordForm')
+            ->livewireSubmitHandler('loginWithPassword')
+            ->footer([
+                Actions::make($this->getPasswordFormActions())
+                    ->fullWidth()
+                    ->key('password-form-actions'),
+            ])
+            ->visible(fn (): bool => $this->step === 2);
+    }
+
     public function getOtpFormContentComponent(): Component
     {
         return Form::make([EmbeddedSchema::make('otpForm')])
@@ -197,7 +335,7 @@ class OtpLogin extends SimplePage
                     ->fullWidth()
                     ->key('otp-form-actions'),
             ])
-            ->visible(fn (): bool => $this->step === 2);
+            ->visible(fn (): bool => $this->step === 3);
     }
 
     /**
@@ -207,8 +345,28 @@ class OtpLogin extends SimplePage
     {
         return [
             Action::make('requestOtp')
-                ->label('Send Verification Code')
+                ->label('Continue')
                 ->submit('requestOtp'),
+        ];
+    }
+
+    /**
+     * @return array<Action | ActionGroup>
+     */
+    protected function getPasswordFormActions(): array
+    {
+        return [
+            Action::make('loginWithPassword')
+                ->label('Log In')
+                ->submit('loginWithPassword'),
+            Action::make('switchToOtp')
+                ->label('Use verification code instead')
+                ->link()
+                ->action('switchToOtp'),
+            Action::make('goBack')
+                ->label('Back')
+                ->link()
+                ->action('goBack'),
         ];
     }
 
@@ -240,19 +398,32 @@ class OtpLogin extends SimplePage
 
     public function getHeading(): string|Htmlable|null
     {
-        if ($this->step === 2) {
-            return 'Enter Verification Code';
-        }
-
-        return 'Student Login';
+        return match ($this->step) {
+            2 => 'Enter Your Password',
+            3 => 'Enter Verification Code',
+            default => 'Student Login',
+        };
     }
 
     public function getSubheading(): string|Htmlable|null
     {
-        if ($this->step === 2) {
-            return "We sent a code to {$this->studentEmail}";
+        return match ($this->step) {
+            2 => 'Or use a verification code sent to your email.',
+            3 => $this->getMaskedEmailMessage(),
+            default => 'Enter your email or student ID to continue.',
+        };
+    }
+
+    protected function getMaskedEmailMessage(): string
+    {
+        if (! $this->studentEmail) {
+            return 'Check your email for the verification code.';
         }
 
-        return 'Enter your email or student ID to receive a login code.';
+        // Mask email: show first 2 chars + domain
+        $parts = explode('@', $this->studentEmail);
+        $masked = substr($parts[0], 0, 2).'***@'.($parts[1] ?? '');
+
+        return "We sent a code to {$masked}";
     }
 }

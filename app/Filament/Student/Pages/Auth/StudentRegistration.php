@@ -211,12 +211,20 @@ class StudentRegistration extends SimplePage
             return;
         }
 
-        // Block personal_email that matches any student's institutional email
+        // Case-insensitive uniqueness checks (replaces form-level ->unique() rules)
+        $personalEmailTaken = Student::query()
+            ->whereRaw('LOWER(personal_email) = ?', [$data['personal_email']])
+            ->exists();
+
+        $userEmailTaken = User::query()
+            ->whereRaw('LOWER(email) = ?', [$data['personal_email']])
+            ->exists();
+
         $institutionalCollision = Student::query()
             ->whereRaw('LOWER(email) = ?', [$data['personal_email']])
             ->exists();
 
-        if ($institutionalCollision) {
+        if ($personalEmailTaken || $userEmailTaken || $institutionalCollision) {
             throw ValidationException::withMessages([
                 'data.personal_email' => 'This email cannot be used. Please choose a different email address.',
             ]);
@@ -364,8 +372,6 @@ class StudentRegistration extends SimplePage
                     ->helperText('This will be your login email. Use an email you check regularly.')
                     ->email()
                     ->required()
-                    ->unique('students', 'personal_email')
-                    ->unique('users', 'email')
                     ->autofocus(),
                 TextInput::make('password')
                     ->label('Password')

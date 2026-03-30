@@ -303,6 +303,34 @@ class StudentRegistrationTest extends TestCase
             ->assertHasErrors(['data.personal_email']);
     }
 
+    public function test_registration_fails_with_case_insensitive_duplicate_email(): void
+    {
+        Http::fake();
+
+        Student::factory()->create([
+            'personal_email' => 'Taken@Gmail.COM',
+            'registered_at' => now(),
+            'password' => 'secret',
+        ]);
+
+        $student = Student::factory()->create([
+            'student_id_number' => 'SN999999999',
+        ]);
+
+        $this->simulateOtpVerification($student);
+
+        Livewire::test(StudentRegistration::class)
+            ->set('step', 3)
+            ->set('studentId', $student->id)
+            ->set('studentEmail', $student->email)
+            ->set('data.personal_email', 'taken@gmail.com')
+            ->set('data.password', 'password123')
+            ->set('data.password_confirmation', 'password123')
+            ->set('data.github_username', '')
+            ->call('register')
+            ->assertHasErrors(['data.personal_email']);
+    }
+
     public function test_registration_fails_with_institutional_email_as_personal(): void
     {
         Http::fake();

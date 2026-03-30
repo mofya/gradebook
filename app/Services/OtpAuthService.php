@@ -53,9 +53,11 @@ class OtpAuthService
 
     public function resolveStudent(string $identifier): ?Student
     {
+        $normalized = mb_strtolower($identifier);
+
         return Student::query()
-            ->where('email', $identifier)
-            ->orWhere('personal_email', $identifier)
+            ->whereRaw('LOWER(email) = ?', [$normalized])
+            ->orWhereRaw('LOWER(personal_email) = ?', [$normalized])
             ->orWhere('student_id_number', $identifier)
             ->first();
     }

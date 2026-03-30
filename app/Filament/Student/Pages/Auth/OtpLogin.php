@@ -98,6 +98,10 @@ class OtpLogin extends SimplePage
         $this->studentEmail = $student->preferredEmail();
         $this->studentHasPassword = $student->isRegistered();
 
+        // Bind the resolved student to the session so loginWithPassword/verifyOtp
+        // cannot be tricked into authenticating a different student
+        session()->put('login-student-id', $student->id);
+
         // If student has a password, show password form first
         if ($this->studentHasPassword) {
             $this->step = 2;
@@ -127,7 +131,7 @@ class OtpLogin extends SimplePage
 
         $data = $this->passwordForm->getState();
 
-        $student = Student::find($this->studentId);
+        $student = $this->getSessionStudent();
 
         if (! $student || ! Hash::check($data['password'], $student->password)) {
             throw ValidationException::withMessages([
@@ -138,6 +142,7 @@ class OtpLogin extends SimplePage
         $otpService = app(OtpAuthService::class);
         $user = $otpService->ensureUserExists($student);
 
+        session()->forget('login-student-id');
         Filament::auth()->login($user);
         session()->regenerate();
 
@@ -146,7 +151,7 @@ class OtpLogin extends SimplePage
 
     public function switchToOtp(): void
     {
-        $student = Student::find($this->studentId);
+        $student = $this->getSessionStudent();
 
         if (! $student) {
             $this->goBack();
@@ -164,10 +169,18 @@ class OtpLogin extends SimplePage
     {
         $data = $this->otpForm->getState();
 
+        $student = $this->getSessionStudent();
+
+        if (! $student) {
+            $this->goBack();
+
+            return null;
+        }
+
         $otpService = app(OtpAuthService::class);
 
-        // OTPs are keyed by the email they were sent to
-        $result = $otpService->verifyOtp($this->studentEmail, $data['code']);
+        // Verify against the session-bound student's preferred email, not client state
+        $result = $otpService->verifyOtp($student->preferredEmail(), $data['code']);
 
         if (! $result['success']) {
             throw ValidationException::withMessages([
@@ -175,9 +188,9 @@ class OtpLogin extends SimplePage
             ]);
         }
 
-        $student = Student::find($this->studentId);
         $user = $otpService->ensureUserExists($student);
 
+        session()->forget('login-student-id');
         Filament::auth()->login($user);
         session()->regenerate();
 
@@ -186,11 +199,19 @@ class OtpLogin extends SimplePage
 
     public function goBack(): void
     {
+        session()->forget('login-student-id');
         $this->step = 1;
         $this->studentEmail = null;
         $this->studentId = null;
         $this->studentHasPassword = false;
         $this->form->fill();
+    }
+
+    protected function getSessionStudent(): ?Student
+    {
+        $sessionStudentId = session()->get('login-student-id');
+
+        return $sessionStudentId ? Student::find($sessionStudentId) : null;
     }
 
     protected function sendOtpToStudent(Student $student, OtpAuthService $otpService): void

@@ -155,6 +155,8 @@ class PasswordLoginTest extends TestCase
         $student = $this->createRegisteredStudent();
         $user = User::factory()->student()->create(['email' => 'student@gmail.com']);
 
+        session()->put('login-student-id', $student->id);
+
         $otpService = app(OtpAuthService::class);
         $code = $otpService->generateOtp('student@gmail.com');
 

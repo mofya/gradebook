@@ -196,6 +196,7 @@ class StudentRegistration extends SimplePage
         }
 
         $data = $this->accountForm->getState();
+        $data['personal_email'] = mb_strtolower($data['personal_email']);
 
         $student = Student::find($sessionStudentId);
 
@@ -212,7 +213,7 @@ class StudentRegistration extends SimplePage
 
         // Block personal_email that matches any student's institutional email
         $institutionalCollision = Student::query()
-            ->where('email', $data['personal_email'])
+            ->whereRaw('LOWER(email) = ?', [$data['personal_email']])
             ->exists();
 
         if ($institutionalCollision) {

@@ -161,6 +161,7 @@ class MyProfile extends Page
     public function updateProfile(): void
     {
         $data = $this->profileForm->getState();
+        $data['personal_email'] = mb_strtolower($data['personal_email']);
         $student = $this->getStudent();
 
         if (! $student) {
@@ -169,18 +170,18 @@ class MyProfile extends Page
 
         // Check uniqueness (excluding current student)
         $emailTaken = Student::query()
-            ->where('personal_email', $data['personal_email'])
+            ->whereRaw('LOWER(personal_email) = ?', [$data['personal_email']])
             ->where('id', '!=', $student->id)
             ->exists();
 
         $userEmailTaken = User::query()
-            ->where('email', $data['personal_email'])
+            ->whereRaw('LOWER(email) = ?', [$data['personal_email']])
             ->where('email', '!=', auth()->user()->email)
             ->exists();
 
         // Block personal_email that matches any student's institutional email
         $institutionalCollision = Student::query()
-            ->where('email', $data['personal_email'])
+            ->whereRaw('LOWER(email) = ?', [$data['personal_email']])
             ->exists();
 
         if ($emailTaken || $userEmailTaken || $institutionalCollision) {

@@ -55,9 +55,11 @@ class Student extends Model
      */
     public static function findByEmail(string $email): ?self
     {
+        $normalized = mb_strtolower($email);
+
         return static::query()
-            ->where('email', $email)
-            ->orWhere('personal_email', $email)
+            ->whereRaw('LOWER(email) = ?', [$normalized])
+            ->orWhereRaw('LOWER(personal_email) = ?', [$normalized])
             ->first();
     }
 

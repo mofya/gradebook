@@ -5,143 +5,14 @@ namespace App\Filament\Student\Pages;
 use App\Models\Enrollment;
 use App\Models\GradeQuery;
 use App\Models\Student;
-use App\Services\BackfillLabGradesService;
 use App\Services\GradingService;
-use Filament\Notifications\Notification;
 use Filament\Pages\Dashboard as BaseDashboard;
 
 class StudentDashboard extends BaseDashboard
 {
     protected string $view = 'filament.student.pages.student-dashboard';
 
-    public string $githubUsername = '';
-
-    public bool $editingGithub = false;
-
-    public string $sex = '';
-
-    public bool $editingSex = false;
-
     protected ?Student $cachedStudent = null;
-
-    public function mount(): void
-    {
-        $student = $this->getStudent();
-
-        $this->githubUsername = $student?->github_username ?? '';
-        $this->sex = $student?->gender ?? '';
-    }
-
-    public function toggleEditGithub(): void
-    {
-        $this->editingGithub = ! $this->editingGithub;
-
-        if ($this->editingGithub) {
-            $student = $this->getStudent();
-            $this->githubUsername = $student?->github_username ?? '';
-        }
-    }
-
-    public function saveGithubUsername(): void
-    {
-        $student = $this->getStudent();
-
-        if (! $student) {
-            return;
-        }
-
-        $trimmed = trim($this->githubUsername);
-
-        if ($trimmed === '') {
-            $student->update(['github_username' => null]);
-            $this->clearStudentCache();
-            $this->editingGithub = false;
-
-            Notification::make()->title('GitHub username removed.')->success()->send();
-
-            return;
-        }
-
-        // Basic format validation
-        if (! preg_match('/^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/', $trimmed)) {
-            Notification::make()
-                ->title('Invalid GitHub username format.')
-                ->body('GitHub usernames can only contain alphanumeric characters and hyphens, cannot start or end with a hyphen, and are max 39 characters.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        // Uniqueness check
-        $taken = Student::where('github_username', $trimmed)
-            ->where('id', '!=', $student->id)
-            ->exists();
-
-        if ($taken) {
-            Notification::make()
-                ->title('This GitHub username is already linked to another student.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $student->update(['github_username' => $trimmed]);
-        $this->clearStudentCache();
-        $this->githubUsername = $trimmed;
-        $this->editingGithub = false;
-
-        // Backfill any previously unmatched lab grades
-        $backfill = app(BackfillLabGradesService::class)->backfillForStudent($student);
-
-        if ($backfill['grades_created'] > 0) {
-            Notification::make()
-                ->title('GitHub username updated.')
-                ->body($backfill['grades_created'].' lab grade(s) were automatically linked to your account.')
-                ->success()
-                ->send();
-        } else {
-            Notification::make()->title('GitHub username updated.')->success()->send();
-        }
-    }
-
-    public function toggleEditSex(): void
-    {
-        $this->editingSex = ! $this->editingSex;
-
-        if ($this->editingSex) {
-            $student = $this->getStudent();
-            $this->sex = $student?->gender ?? '';
-        }
-    }
-
-    public function saveSex(): void
-    {
-        $student = $this->getStudent();
-
-        if (! $student) {
-            return;
-        }
-
-        $value = trim($this->sex);
-
-        if (! in_array($value, ['Male', 'Female', ''])) {
-            Notification::make()
-                ->title('Please select a valid option.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $student->update(['gender' => $value ?: null]);
-        $this->clearStudentCache();
-        $this->sex = $value;
-        $this->editingSex = false;
-
-        Notification::make()->title('Sex updated.')->success()->send();
-    }
 
     public function getViewData(): array
     {
@@ -217,14 +88,9 @@ class StudentDashboard extends BaseDashboard
     protected function getStudent(): ?Student
     {
         if ($this->cachedStudent === null) {
-            $this->cachedStudent = Student::where('email', auth()->user()->email)->first();
+            $this->cachedStudent = Student::findByEmail(auth()->user()->email);
         }
 
         return $this->cachedStudent;
-    }
-
-    protected function clearStudentCache(): void
-    {
-        $this->cachedStudent = null;
     }
 }

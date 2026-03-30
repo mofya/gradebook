@@ -1,6 +1,6 @@
 <x-filament-panels::page>
     @if($student)
-        <div class="space-y-6" wire:loading.class="opacity-50 pointer-events-none" wire:target="saveGithubUsername, saveSex, toggleEditGithub, toggleEditSex">
+        <div class="space-y-6">
             {{-- Profile Card --}}
             <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 p-5">
                 <div class="flex items-start justify-between gap-4">
@@ -17,77 +17,35 @@
                                 <span class="text-gray-300 dark:text-gray-600">&middot;</span>
                                 <span>Year {{ $student->year_of_study ?? 'N/A' }}</span>
                             </div>
-                            <div class="mt-1">
-                                @if($editingGithub)
-                                    <form wire:submit="saveGithubUsername" class="flex items-center gap-2">
-                                        <span class="text-sm text-gray-400 dark:text-gray-500">GitHub:</span>
-                                        <input
-                                            type="text"
-                                            wire:model="githubUsername"
-                                            class="h-7 w-48 rounded-md border-gray-300 bg-white px-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                                            placeholder="your-github-username"
-                                            autofocus
-                                        >
-                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400" wire:loading.attr="disabled">
-                                            <span wire:loading.remove wire:target="saveGithubUsername">Save</span>
-                                            <span wire:loading wire:target="saveGithubUsername">Saving...</span>
-                                        </button>
-                                        <button type="button" wire:click="toggleEditGithub" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" wire:loading.attr="disabled" wire:target="saveGithubUsername">Cancel</button>
-                                    </form>
-                                @elseif($student->github_username)
-                                    <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-                                        <span>GitHub:</span>
-                                        <span class="font-medium text-gray-600 dark:text-gray-300">{{ '@' }}{{ $student->github_username }}</span>
-                                        <button wire:click="toggleEditGithub" class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400">Edit</button>
-                                    </div>
-                                @else
-                                    <button wire:click="toggleEditGithub" class="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
-                                        <span>+ Add GitHub username</span>
-                                    </button>
-                                @endif
-                            </div>
-                            <div class="mt-1">
-                                @if($editingSex)
-                                    <form wire:submit="saveSex" class="flex items-center gap-2">
-                                        <span class="text-sm text-gray-400 dark:text-gray-500">Sex:</span>
-                                        <select
-                                            wire:model="sex"
-                                            class="h-7 rounded-md border-gray-300 bg-white px-2 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                                        >
-                                            <option value="">-- Select --</option>
-                                            <option value="Male">Male</option>
-                                            <option value="Female">Female</option>
-                                        </select>
-                                        <button type="submit" class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400" wire:loading.attr="disabled">
-                                            <span wire:loading.remove wire:target="saveSex">Save</span>
-                                            <span wire:loading wire:target="saveSex">Saving...</span>
-                                        </button>
-                                        <button type="button" wire:click="toggleEditSex" class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" wire:loading.attr="disabled" wire:target="saveSex">Cancel</button>
-                                    </form>
-                                @elseif($student->gender && $student->gender !== '')
-                                    <div class="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
-                                        <span>Sex:</span>
-                                        <span class="font-medium text-gray-600 dark:text-gray-300">{{ $student->gender }}</span>
-                                        <button wire:click="toggleEditSex" class="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400">Edit</button>
-                                    </div>
-                                @else
-                                    <button wire:click="toggleEditSex" class="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
-                                        <span>+ Add sex</span>
-                                    </button>
-                                @endif
-                            </div>
+                            @if($student->github_username)
+                                <div class="mt-1 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+                                    <span>GitHub:</span>
+                                    <span class="font-medium text-gray-600 dark:text-gray-300">{{ '@' }}{{ $student->github_username }}</span>
+                                </div>
+                            @endif
+                            @if($student->gender)
+                                <div class="mt-1 flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+                                    <span>Sex:</span>
+                                    <span class="font-medium text-gray-600 dark:text-gray-300">{{ $student->gender }}</span>
+                                </div>
+                            @endif
                         </div>
                     </div>
-                    @if($student->study_mode)
-                        <span class="inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/30">
-                            {{ ucfirst($student->study_mode) }}
-                        </span>
-                    @endif
+                    <div class="flex items-center gap-3 shrink-0">
+                        @if($student->study_mode)
+                            <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-gray-600/20 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/30">
+                                {{ ucfirst($student->study_mode) }}
+                            </span>
+                        @endif
+                        <a href="{{ route('filament.student.pages.my-profile') }}" class="inline-flex items-center gap-1 rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-600/10 hover:bg-gray-100 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20 dark:hover:bg-gray-500/20">
+                            Edit Profile
+                        </a>
+                    </div>
                 </div>
             </div>
 
             {{-- Missing Info Prompts --}}
-            @if(!$student->github_username || !$student->gender || $student->gender === '')
+            @if(!$student->github_username || !$student->gender)
                 <div class="space-y-3">
                     @if(!$student->github_username)
                         <div class="rounded-xl bg-amber-50 ring-1 ring-amber-600/10 px-5 py-3 dark:bg-amber-500/5 dark:ring-amber-500/20">
@@ -95,21 +53,21 @@
                                 <p class="text-sm text-amber-800 dark:text-amber-200">
                                     Your GitHub username is not set. Lab grades are matched by GitHub username &mdash; add yours to ensure your grades are linked correctly.
                                 </p>
-                                <button wire:click="toggleEditGithub" class="shrink-0 rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600">
+                                <a href="{{ route('filament.student.pages.my-profile') }}" class="shrink-0 rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600">
                                     Add now
-                                </button>
+                                </a>
                             </div>
                         </div>
                     @endif
-                    @if(!$student->gender || $student->gender === '')
+                    @if(!$student->gender)
                         <div class="rounded-xl bg-blue-50 ring-1 ring-blue-600/10 px-5 py-3 dark:bg-blue-500/5 dark:ring-blue-500/20">
                             <div class="flex items-center justify-between gap-4">
                                 <p class="text-sm text-blue-800 dark:text-blue-200">
                                     Your sex is not set. This information is used for reporting purposes &mdash; please add it to your profile.
                                 </p>
-                                <button wire:click="toggleEditSex" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
+                                <a href="{{ route('filament.student.pages.my-profile') }}" class="shrink-0 rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600">
                                     Add now
-                                </button>
+                                </a>
                             </div>
                         </div>
                     @endif

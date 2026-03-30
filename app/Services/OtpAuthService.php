@@ -55,6 +55,7 @@ class OtpAuthService
     {
         return Student::query()
             ->where('email', $identifier)
+            ->orWhere('personal_email', $identifier)
             ->orWhere('student_id_number', $identifier)
             ->first();
     }
@@ -121,7 +122,13 @@ class OtpAuthService
 
     public function ensureUserExists(Student $student): User
     {
-        $user = User::query()->where('email', $student->email)->first();
+        $preferredEmail = $student->preferredEmail();
+
+        // Check for existing user by either email
+        $user = User::query()
+            ->where('email', $preferredEmail)
+            ->orWhere('email', $student->email)
+            ->first();
 
         if ($user) {
             return $user;
@@ -129,8 +136,8 @@ class OtpAuthService
 
         return User::forceCreate([
             'name' => "{$student->first_name} {$student->last_name}",
-            'email' => $student->email,
-            'password' => Str::random(64),
+            'email' => $preferredEmail,
+            'password' => $student->password ?? Str::random(64),
             'role' => Role::Student,
             'email_verified_at' => now(),
         ]);

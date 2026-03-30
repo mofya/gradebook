@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament\Student;
 use App\Filament\Student\Pages\Auth\OtpLogin;
 use App\Models\Student;
 use App\Models\User;
+use App\Notifications\OtpLoginNotification;
 use App\Services\OtpAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -32,7 +33,7 @@ class OtpLoginTest extends TestCase
             ->set('data.identifier', 'student@example.com')
             ->call('requestOtp')
             ->assertHasNoErrors()
-            ->assertSet('step', 2)
+            ->assertSet('step', 3)
             ->assertSet('studentEmail', 'student@example.com');
     }
 
@@ -55,7 +56,7 @@ class OtpLoginTest extends TestCase
             ->call('requestOtp');
 
         Notification::assertSentOnDemand(
-            \App\Notifications\OtpLoginNotification::class,
+            OtpLoginNotification::class,
             function ($notification, $channels, $notifiable) {
                 return $notifiable->routes['mail'] === 'student@example.com';
             }
@@ -73,7 +74,8 @@ class OtpLoginTest extends TestCase
         $code = $otpService->generateOtp('student@example.com');
 
         Livewire::test(OtpLogin::class)
-            ->set('step', 2)
+            ->set('step', 3)
+            ->set('studentId', $student->id)
             ->set('studentEmail', 'student@example.com')
             ->set('data.code', $code)
             ->call('verifyOtp')
@@ -94,7 +96,8 @@ class OtpLoginTest extends TestCase
         $otpService->generateOtp('student@example.com');
 
         Livewire::test(OtpLogin::class)
-            ->set('step', 2)
+            ->set('step', 3)
+            ->set('studentId', $student->id)
             ->set('studentEmail', 'student@example.com')
             ->set('data.code', '000000')
             ->call('verifyOtp')
@@ -127,5 +130,21 @@ class OtpLoginTest extends TestCase
             ->call('requestOtp')
             ->assertSet('step', 1)
             ->assertNotified();
+    }
+
+    public function test_can_resolve_student_by_personal_email(): void
+    {
+        Notification::fake();
+
+        $student = Student::factory()->create([
+            'email' => 'student@unza.zm',
+            'personal_email' => 'student@gmail.com',
+        ]);
+
+        Livewire::test(OtpLogin::class)
+            ->set('data.identifier', 'student@gmail.com')
+            ->call('requestOtp')
+            ->assertHasNoErrors()
+            ->assertSet('studentEmail', 'student@gmail.com');
     }
 }

@@ -27,9 +27,7 @@ class MyTranscript extends Page
     {
         $user = auth()->user();
 
-        $student = Student::query()
-            ->where('email', $user->email)
-            ->first();
+        $student = Student::findByEmail($user->email);
 
         if (! $student) {
             return ['student' => null, 'transcriptData' => null, 'semesters' => collect()];
@@ -74,7 +72,9 @@ class MyTranscript extends Page
     public function downloadTranscript(): StreamedResponse
     {
         $user = auth()->user();
-        $student = Student::query()->where('email', $user->email)->firstOrFail();
+        $student = Student::findByEmail($user->email);
+
+        abort_unless($student, 404, 'No student record found for your account.');
 
         $service = app(TranscriptService::class);
         $data = $service->generateTranscriptData($student);

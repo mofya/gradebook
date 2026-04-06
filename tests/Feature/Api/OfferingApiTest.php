@@ -12,6 +12,7 @@ use App\Models\GradeResult;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\SubsectionScore;
+use App\Models\UnmatchedLabGrade;
 use App\Models\User;
 use App\Models\Year;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -366,6 +367,222 @@ class OfferingApiTest extends TestCase
 
         $this->actingAs($lecturer, 'sanctum')
             ->getJson('/api/v1/offerings/'.$otherOffering->id.'/enrollments')
+            ->assertForbidden();
+    }
+
+    // --- Assessments endpoint ---
+
+    public function test_list_assessments(): void
+    {
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'type' => 'ca',
+            'name' => 'Labs',
+        ]);
+
+        Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $this->offering->course_id,
+            'name' => 'Lab 01',
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/assessments');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.name', 'Labs')
+            ->assertJsonPath('data.0.assessments.0.name', 'Lab 01');
+    }
+
+    // --- Unmatched endpoint ---
+
+    public function test_list_unmatched_grades(): void
+    {
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'type' => 'ca',
+        ]);
+
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $this->offering->course_id,
+        ]);
+
+        UnmatchedLabGrade::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'assessment_id' => $assessment->id,
+            'github_username' => 'unknown-user',
+            'status' => 'unmatched',
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/unmatched');
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.github_username', 'unknown-user');
+    }
+
+    public function test_unmatched_excludes_matched_items(): void
+    {
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'type' => 'ca',
+        ]);
+
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $this->offering->course_id,
+        ]);
+
+        UnmatchedLabGrade::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'assessment_id' => $assessment->id,
+            'status' => 'matched',
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/unmatched')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    // --- Bulk enroll endpoint ---
+
+    public function test_bulk_enroll_students(): void
+    {
+        $student1 = Student::factory()->create(['student_id_number' => 'SNBULK001']);
+        $student2 = Student::factory()->create(['student_id_number' => 'SNBULK002']);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/enrollments', [
+                'student_ids' => ['SNBULK001', 'SNBULK002'],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.enrolled', 2)
+            ->assertJsonPath('data.already_enrolled', 0)
+            ->assertJsonPath('data.not_found', []);
+
+        $this->assertDatabaseHas('enrollments', [
+            'student_id' => $student1->id,
+            'course_offering_id' => $this->offering->id,
+            'source' => 'api',
+        ]);
+    }
+
+    public function test_bulk_enroll_handles_duplicates_and_not_found(): void
+    {
+        $student = Student::factory()->create(['student_id_number' => 'SNBULK003']);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/enrollments', [
+                'student_ids' => ['SNBULK003', 'NONEXISTENT'],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.enrolled', 0)
+            ->assertJsonPath('data.already_enrolled', 1)
+            ->assertJsonPath('data.not_found', ['NONEXISTENT']);
+    }
+
+    public function test_bulk_enroll_validates_payload(): void
+    {
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/enrollments', [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['student_ids']);
+    }
+
+    // --- Status endpoint ---
+
+    public function test_activate_offering_via_api(): void
+    {
+        $offering = CourseOffering::factory()->create([
+            'course_id' => $this->offering->course_id,
+            'semester_id' => $this->offering->semester_id,
+            'lecturer_id' => $this->user->id,
+            'status' => 'draft',
+        ]);
+
+        AssessmentGroup::factory()->create(['course_offering_id' => $offering->id]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->patchJson('/api/v1/offerings/'.$offering->id.'/status', [
+                'action' => 'activate',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.status', 'active');
+    }
+
+    public function test_invalid_status_transition_returns_422(): void
+    {
+        // Offering is already active (from setUp), can't activate again
+        $this->actingAs($this->user, 'sanctum')
+            ->patchJson('/api/v1/offerings/'.$this->offering->id.'/status', [
+                'action' => 'activate',
+            ])
+            ->assertStatus(422)
+            ->assertJsonStructure(['error']);
+    }
+
+    public function test_status_validates_action(): void
+    {
+        $this->actingAs($this->user, 'sanctum')
+            ->patchJson('/api/v1/offerings/'.$this->offering->id.'/status', [
+                'action' => 'invalid',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['action']);
+    }
+
+    // --- Verification link endpoint ---
+
+    public function test_generate_verification_link_via_api(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/verification-link', [
+                'action' => 'generate',
+                'expiry_days' => 5,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonStructure(['data' => ['verify_url', 'grades_url', 'expires_at']]);
+
+        $this->offering->refresh();
+        $this->assertNotNull($this->offering->verification_token);
+    }
+
+    public function test_revoke_verification_link_via_api(): void
+    {
+        $this->offering->generateVerificationToken(3);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/verification-link', [
+                'action' => 'revoke',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.message', 'Verification link revoked.');
+
+        $this->offering->refresh();
+        $this->assertNull($this->offering->verification_token);
+    }
+
+    public function test_lecturer_cannot_bulk_enroll_another_lecturers_offering(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => User::factory()->lecturer()->create()->id]);
+
+        $this->actingAs($lecturer, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$otherOffering->id.'/enrollments', [
+                'student_ids' => ['SN001'],
+            ])
             ->assertForbidden();
     }
 }

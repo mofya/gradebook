@@ -48,6 +48,7 @@ class MyGradesTest extends TestCase
         $offering = CourseOffering::factory()->create([
             'course_id' => $course->id,
             'semester_id' => $semester->id,
+            'is_published' => true,
         ]);
 
         Enrollment::factory()->create([
@@ -72,6 +73,7 @@ class MyGradesTest extends TestCase
             'course_id' => $course->id,
             'semester_id' => $semester->id,
             'ca_weight' => 40,
+            'is_published' => true,
         ]);
 
         $group = AssessmentGroup::factory()->create([
@@ -105,6 +107,7 @@ class MyGradesTest extends TestCase
         $offering = CourseOffering::factory()->create([
             'course_id' => $course->id,
             'semester_id' => $semester->id,
+            'is_published' => true,
         ]);
 
         Enrollment::factory()->create([
@@ -123,5 +126,47 @@ class MyGradesTest extends TestCase
 
         Livewire::test(MyGrades::class)
             ->assertSee('No student record found');
+    }
+
+    public function test_my_grades_hides_unpublished_offerings(): void
+    {
+        $year = Year::factory()->create();
+        $semester = Semester::factory()->create(['year_id' => $year->id]);
+        $course = Course::factory()->create(['year_id' => $year->id, 'credits' => 3]);
+        $offering = CourseOffering::factory()->create([
+            'course_id' => $course->id,
+            'semester_id' => $semester->id,
+            'is_published' => false,
+        ]);
+
+        Enrollment::factory()->create([
+            'student_id' => $this->student->id,
+            'course_offering_id' => $offering->id,
+            'ca_total' => 72.00,
+        ]);
+
+        Livewire::test(MyGrades::class)
+            ->assertDontSee($course->code);
+    }
+
+    public function test_my_grades_shows_published_offerings(): void
+    {
+        $year = Year::factory()->create();
+        $semester = Semester::factory()->create(['year_id' => $year->id]);
+        $course = Course::factory()->create(['year_id' => $year->id, 'credits' => 3]);
+        $offering = CourseOffering::factory()->create([
+            'course_id' => $course->id,
+            'semester_id' => $semester->id,
+            'is_published' => true,
+        ]);
+
+        Enrollment::factory()->create([
+            'student_id' => $this->student->id,
+            'course_offering_id' => $offering->id,
+            'ca_total' => 72.00,
+        ]);
+
+        Livewire::test(MyGrades::class)
+            ->assertSee($course->code);
     }
 }

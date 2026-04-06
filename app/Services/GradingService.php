@@ -114,6 +114,8 @@ class GradingService
     /**
      * Calculate cumulative GPA across all semesters.
      *
+     * @deprecated Use calculateSemesterGpa() instead — identical logic.
+     *
      * @param  array<int, array{mark: float, credits: int}>  $allCourseResults
      */
     public function calculateCumulativeGpa(array $allCourseResults): float

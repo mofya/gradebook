@@ -14,7 +14,7 @@ class CourseOfferingPolicy
 
     public function view(User $user, CourseOffering $courseOffering): bool
     {
-        return $user->isAdmin() || $user->isLecturer();
+        return $user->isAdmin() || ($user->isLecturer() && $courseOffering->isLecturerAssigned($user));
     }
 
     public function create(User $user): bool
@@ -24,7 +24,7 @@ class CourseOfferingPolicy
 
     public function update(User $user, CourseOffering $courseOffering): bool
     {
-        return $user->isAdmin() || $user->isLecturer();
+        return $user->isAdmin() || ($user->isLecturer() && $courseOffering->isLecturerAssigned($user));
     }
 
     public function delete(User $user, CourseOffering $courseOffering): bool

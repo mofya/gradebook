@@ -273,4 +273,99 @@ class OfferingApiTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    public function test_student_user_cannot_access_offerings(): void
+    {
+        $studentUser = User::factory()->student()->create();
+
+        $this->actingAs($studentUser, 'sanctum')
+            ->getJson('/api/v1/offerings')
+            ->assertForbidden();
+    }
+
+    public function test_lecturer_can_list_own_offerings(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $offering = CourseOffering::factory()->create(['lecturer_id' => $lecturer->id]);
+
+        $response = $this->actingAs($lecturer, 'sanctum')
+            ->getJson('/api/v1/offerings');
+
+        $response->assertOk();
+
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($offering->id, $ids);
+    }
+
+    public function test_lecturer_only_sees_own_offerings_in_index(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $ownOffering = CourseOffering::factory()->create(['lecturer_id' => $lecturer->id]);
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => User::factory()->lecturer()->create()->id]);
+
+        $response = $this->actingAs($lecturer, 'sanctum')
+            ->getJson('/api/v1/offerings');
+
+        $response->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($ownOffering->id, $ids);
+        $this->assertNotContains($otherOffering->id, $ids);
+    }
+
+    public function test_lecturer_cannot_view_another_lecturers_offering(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $otherLecturer = User::factory()->lecturer()->create();
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => $otherLecturer->id]);
+
+        $this->actingAs($lecturer, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$otherOffering->id)
+            ->assertForbidden();
+    }
+
+    public function test_lecturer_can_view_own_offering(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $offering = CourseOffering::factory()->create(['lecturer_id' => $lecturer->id]);
+
+        $this->actingAs($lecturer, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$offering->id)
+            ->assertOk();
+    }
+
+    public function test_lecturer_cannot_import_lab_grades_to_another_lecturers_offering(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $otherLecturer = User::factory()->lecturer()->create();
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => $otherLecturer->id]);
+
+        $this->actingAs($lecturer, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$otherOffering->id.'/lab-grades', [
+                'assessment_name' => 'Lab 01',
+                'grades' => [['github_username' => 'user', 'final_score' => 50]],
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_admin_can_see_all_offerings(): void
+    {
+        $admin = User::factory()->admin()->create();
+        CourseOffering::factory()->count(3)->create();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/offerings');
+
+        $response->assertOk();
+        $this->assertGreaterThanOrEqual(3, count($response->json('data')));
+    }
+
+    public function test_lecturer_cannot_view_enrollments_of_another_lecturers_offering(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => User::factory()->lecturer()->create()->id]);
+
+        $this->actingAs($lecturer, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$otherOffering->id.'/enrollments')
+            ->assertForbidden();
+    }
 }

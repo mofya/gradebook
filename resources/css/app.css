@@ -2,4 +2,7 @@
 
 @theme {
     --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+    --color-unza-green: #007A20;
+    --color-unza-green-light: #01862B;
+    --color-unza-red: #B31B1B;
 }

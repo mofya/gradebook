@@ -34,14 +34,19 @@ class ClassReport extends Page
             ->schema([
                 Select::make('course_offering_id')
                     ->label('Course Offering')
-                    ->options(
-                        CourseOffering::query()
-                            ->with(['course', 'semester.year'])
-                            ->get()
+                    ->options(function () {
+                        $query = CourseOffering::query()
+                            ->with(['course', 'semester.year']);
+
+                        if (auth()->user()->isLecturer()) {
+                            $query->where('lecturer_id', auth()->id());
+                        }
+
+                        return $query->get()
                             ->mapWithKeys(fn ($co) => [
                                 $co->id => $co->course->code.' - '.($co->semester->year->name ?? '').' '.$co->semester->name,
-                            ])
-                    )
+                            ]);
+                    })
                     ->searchable()
                     ->required()
                     ->live()
@@ -60,6 +65,13 @@ class ClassReport extends Page
         $courseOffering = CourseOffering::find($this->course_offering_id);
 
         if (! $courseOffering) {
+            $this->reportData = null;
+
+            return;
+        }
+
+        $user = auth()->user();
+        if (! $user->isAdmin() && ! $courseOffering->isLecturerAssigned($user)) {
             $this->reportData = null;
 
             return;
@@ -92,6 +104,9 @@ class ClassReport extends Page
     public function exportExcel(): BinaryFileResponse
     {
         $courseOffering = CourseOffering::findOrFail($this->course_offering_id);
+
+        $user = auth()->user();
+        abort_unless($user->isAdmin() || $courseOffering->isLecturerAssigned($user), 403);
 
         return Excel::download(
             new GradeSheetExport($courseOffering),

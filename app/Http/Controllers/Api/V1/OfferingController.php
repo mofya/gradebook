@@ -9,19 +9,29 @@ use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\Student;
 use App\Services\LabGradeImportService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class OfferingController extends Controller
 {
+    use AuthorizesRequests;
+
     /**
      * List course offerings with basic info.
      */
     public function index(): JsonResponse
     {
-        $offerings = CourseOffering::query()
-            ->with(['course', 'semester.year', 'lecturer'])
-            ->paginate(20);
+        $this->authorize('viewAny', CourseOffering::class);
+
+        $query = CourseOffering::query()
+            ->with(['course', 'semester.year', 'lecturer']);
+
+        if (auth()->user()->isLecturer()) {
+            $query->where('lecturer_id', auth()->id());
+        }
+
+        $offerings = $query->paginate(20);
 
         return response()->json([
             'data' => $offerings->map(fn ($o) => [
@@ -47,6 +57,8 @@ class OfferingController extends Controller
      */
     public function show(CourseOffering $offering): JsonResponse
     {
+        $this->authorize('view', $offering);
+
         $offering->load([
             'course',
             'semester.year',
@@ -96,6 +108,8 @@ class OfferingController extends Controller
      */
     public function enrollments(CourseOffering $offering): JsonResponse
     {
+        $this->authorize('view', $offering);
+
         $offering->load('enrollments.student');
 
         return response()->json([
@@ -122,6 +136,8 @@ class OfferingController extends Controller
      */
     public function grades(CourseOffering $offering): JsonResponse
     {
+        $this->authorize('view', $offering);
+
         $offering->load([
             'enrollments.gradeResults.assessment',
             'enrollments.gradeResults.subsectionScores.assessmentSubsection',
@@ -154,6 +170,8 @@ class OfferingController extends Controller
      */
     public function importLabGrades(Request $request, CourseOffering $offering): JsonResponse
     {
+        $this->authorize('update', $offering);
+
         $validated = $request->validate([
             'assessment_name' => 'required|string',
             'grades' => 'required|array|min:1',
@@ -198,6 +216,8 @@ class OfferingController extends Controller
      */
     public function studentGrades(CourseOffering $offering, string $identifier): JsonResponse
     {
+        $this->authorize('view', $offering);
+
         $offering->load(['course', 'semester.year']);
 
         // Try student_id_number first, then github_username

@@ -113,4 +113,51 @@ class GradeQueriesTest extends TestCase
             'body' => 'Follow-up message.',
         ]);
     }
+
+    public function test_cannot_reply_to_another_students_query(): void
+    {
+        $otherStudent = Student::factory()->create();
+        $otherEnrollment = Enrollment::factory()->create([
+            'student_id' => $otherStudent->id,
+            'course_offering_id' => $this->enrollment->course_offering_id,
+        ]);
+
+        $query = GradeQuery::factory()->create([
+            'student_id' => $otherStudent->id,
+            'enrollment_id' => $otherEnrollment->id,
+            'subject' => 'Other Query',
+            'status' => 'open',
+            'student_message' => 'Not my query.',
+        ]);
+
+        Livewire::test(GradeQueries::class)
+            ->set('replyingToQueryId', $query->id)
+            ->set('replyBody', 'Trying to reply to someone else.')
+            ->call('submitReply');
+
+        $this->assertDatabaseMissing('grade_query_messages', [
+            'grade_query_id' => $query->id,
+            'user_id' => $this->user->id,
+        ]);
+    }
+
+    public function test_cannot_submit_query_for_another_students_enrollment(): void
+    {
+        $otherStudent = Student::factory()->create();
+        $otherEnrollment = Enrollment::factory()->create([
+            'student_id' => $otherStudent->id,
+            'course_offering_id' => $this->enrollment->course_offering_id,
+        ]);
+
+        Livewire::test(GradeQueries::class)
+            ->set('selectedEnrollmentId', $otherEnrollment->id)
+            ->set('querySubject', 'Sneaky Query')
+            ->set('queryBody', 'Trying to submit for another student.')
+            ->call('submitQuery');
+
+        $this->assertDatabaseMissing('grade_queries', [
+            'student_id' => $this->student->id,
+            'enrollment_id' => $otherEnrollment->id,
+        ]);
+    }
 }

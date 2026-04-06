@@ -9,6 +9,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -85,5 +86,20 @@ class User extends Authenticatable implements FilamentUser
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function courseOfferings(): HasMany
+    {
+        return $this->hasMany(CourseOffering::class, 'lecturer_id');
+    }
+
+    public function gradedResults(): HasMany
+    {
+        return $this->hasMany(GradeResult::class, 'graded_by');
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(GradeAuditLog::class);
     }
 }

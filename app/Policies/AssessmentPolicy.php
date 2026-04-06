@@ -14,7 +14,13 @@ class AssessmentPolicy
 
     public function view(User $user, Assessment $assessment): bool
     {
-        return $user->isAdmin() || $user->isLecturer();
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $assessment->loadMissing('assessmentGroup.courseOffering');
+
+        return $user->isLecturer() && $assessment->assessmentGroup->courseOffering->isLecturerAssigned($user);
     }
 
     public function create(User $user): bool
@@ -24,7 +30,13 @@ class AssessmentPolicy
 
     public function update(User $user, Assessment $assessment): bool
     {
-        return $user->isAdmin() || $user->isLecturer();
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $assessment->loadMissing('assessmentGroup.courseOffering');
+
+        return $user->isLecturer() && $assessment->assessmentGroup->courseOffering->isLecturerAssigned($user);
     }
 
     public function delete(User $user, Assessment $assessment): bool

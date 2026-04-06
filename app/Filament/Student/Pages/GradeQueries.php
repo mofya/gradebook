@@ -105,6 +105,13 @@ class GradeQueries extends Page
             return;
         }
 
+        $enrollment = Enrollment::find($this->selectedEnrollmentId);
+        if (! $enrollment || $enrollment->student_id !== $student->id) {
+            Notification::make()->title('Invalid enrollment selected.')->danger()->send();
+
+            return;
+        }
+
         GradeQuery::create([
             'student_id' => $student->id,
             'enrollment_id' => $this->selectedEnrollmentId,
@@ -137,6 +144,15 @@ class GradeQueries extends Page
         $user = auth()->user();
 
         if (! $this->replyingToQueryId) {
+            return;
+        }
+
+        $student = Student::findByEmail($user->email);
+        $query = GradeQuery::find($this->replyingToQueryId);
+        if (! $query || ! $student || $query->student_id !== $student->id) {
+            Notification::make()->title('You cannot reply to this query.')->danger()->send();
+            $this->reset(['replyingToQueryId', 'replyBody']);
+
             return;
         }
 

@@ -7,6 +7,7 @@ use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\GradeResult;
 use App\Models\Student;
+use Illuminate\Database\Eloquent\Model;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
@@ -16,12 +17,15 @@ class GradesImport implements ToModel, WithHeadingRow
 
     protected int $skippedCount = 0;
 
+    /** @var array<int, string> */
+    protected array $skippedDetails = [];
+
     public function __construct(
         protected CourseOffering $courseOffering,
     ) {}
 
     /**
-     * @return \Illuminate\Database\Eloquent\Model|null
+     * @return Model|null
      */
     public function model(array $row): ?GradeResult
     {
@@ -31,6 +35,7 @@ class GradesImport implements ToModel, WithHeadingRow
 
         if (! $studentIdNumber || ! $assessmentName || $rawScore === null) {
             $this->skippedCount++;
+            $this->skippedDetails[] = 'Row missing required fields (student_id, assessment_name, or score).';
 
             return null;
         }
@@ -38,6 +43,7 @@ class GradesImport implements ToModel, WithHeadingRow
         $student = Student::where('student_id_number', $studentIdNumber)->first();
         if (! $student) {
             $this->skippedCount++;
+            $this->skippedDetails[] = "Student ID '{$studentIdNumber}' not found.";
 
             return null;
         }
@@ -48,6 +54,7 @@ class GradesImport implements ToModel, WithHeadingRow
 
         if (! $enrollment) {
             $this->skippedCount++;
+            $this->skippedDetails[] = "Student '{$studentIdNumber}' not enrolled in this offering.";
 
             return null;
         }
@@ -60,6 +67,7 @@ class GradesImport implements ToModel, WithHeadingRow
 
         if (! $assessment) {
             $this->skippedCount++;
+            $this->skippedDetails[] = "Assessment '{$assessmentName}' not found in this offering.";
 
             return null;
         }
@@ -93,5 +101,13 @@ class GradesImport implements ToModel, WithHeadingRow
     public function getSkippedCount(): int
     {
         return $this->skippedCount;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getSkippedDetails(): array
+    {
+        return $this->skippedDetails;
     }
 }

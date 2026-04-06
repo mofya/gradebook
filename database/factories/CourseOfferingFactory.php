@@ -6,9 +6,10 @@ use App\Models\Course;
 use App\Models\CourseOffering;
 use App\Models\Semester;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CourseOffering>
+ * @extends Factory<CourseOffering>
  */
 class CourseOfferingFactory extends Factory
 {
@@ -26,6 +27,16 @@ class CourseOfferingFactory extends Factory
             'exam_weight' => 50.00,
             'status' => 'draft',
             'is_published' => false,
+            'verification_token' => null,
+            'verification_expires_at' => null,
         ];
+    }
+
+    public function withVerificationToken(int $days = 3): static
+    {
+        return $this->state(fn () => [
+            'verification_token' => Str::random(64),
+            'verification_expires_at' => now()->addDays($days),
+        ]);
     }
 }

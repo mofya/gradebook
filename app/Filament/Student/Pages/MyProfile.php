@@ -2,6 +2,7 @@
 
 namespace App\Filament\Student\Pages;
 
+use App\Models\GradeAuditLog;
 use App\Models\Student;
 use App\Models\User;
 use App\Services\BackfillLabGradesService;
@@ -14,6 +15,7 @@ use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -160,6 +162,10 @@ class MyProfile extends Page
 
     public function updateProfile(): void
     {
+        if (! $this->checkRateLimit()) {
+            return;
+        }
+
         $data = $this->profileForm->getState();
         $data['personal_email'] = mb_strtolower($data['personal_email']);
         $student = $this->getStudent();
@@ -190,11 +196,15 @@ class MyProfile extends Page
             ]);
         }
 
+        $oldEmail = $student->personal_email;
+
         DB::transaction(function () use ($student, $data) {
             $student->update(['personal_email' => $data['personal_email']]);
 
             auth()->user()->update(['email' => $data['personal_email']]);
         });
+
+        $this->logProfileChange($student, 'profile_email_updated', ['personal_email' => $oldEmail], ['personal_email' => $data['personal_email']]);
 
         $this->cachedStudent = null;
 
@@ -206,6 +216,10 @@ class MyProfile extends Page
 
     public function updatePassword(): void
     {
+        if (! $this->checkRateLimit()) {
+            return;
+        }
+
         $data = $this->passwordForm->getState();
         $student = $this->getStudent();
 
@@ -225,6 +239,8 @@ class MyProfile extends Page
             auth()->user()->update(['password' => $data['new_password']]);
         });
 
+        $this->logProfileChange($student, 'profile_password_changed');
+
         $this->cachedStudent = null;
         $this->passwordForm->fill();
 
@@ -236,6 +252,10 @@ class MyProfile extends Page
 
     public function updateGithub(): void
     {
+        if (! $this->checkRateLimit()) {
+            return;
+        }
+
         $data = $this->githubForm->getState();
         $student = $this->getStudent();
 
@@ -274,9 +294,13 @@ class MyProfile extends Page
             }
         }
 
+        $oldGithub = $student->github_username;
+
         $student->update([
             'github_username' => $username ?: null,
         ]);
+
+        $this->logProfileChange($student, 'profile_github_updated', ['github_username' => $oldGithub], ['github_username' => $username ?: null]);
 
         $this->cachedStudent = null;
 
@@ -303,6 +327,10 @@ class MyProfile extends Page
 
     public function updateGender(): void
     {
+        if (! $this->checkRateLimit()) {
+            return;
+        }
+
         $data = $this->genderForm->getState();
         $student = $this->getStudent();
 
@@ -318,9 +346,13 @@ class MyProfile extends Page
             ]);
         }
 
+        $oldGender = $student->gender;
+
         $student->update([
             'gender' => $value ?: null,
         ]);
+
+        $this->logProfileChange($student, 'profile_gender_updated', ['gender' => $oldGender], ['gender' => $value ?: null]);
 
         $this->cachedStudent = null;
 
@@ -337,5 +369,33 @@ class MyProfile extends Page
         }
 
         return $this->cachedStudent;
+    }
+
+    protected function checkRateLimit(): bool
+    {
+        $key = 'profile-update:'.auth()->id();
+
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            Notification::make()->title('Too many attempts. Please wait a moment.')->danger()->send();
+
+            return false;
+        }
+
+        RateLimiter::hit($key, 60);
+
+        return true;
+    }
+
+    protected function logProfileChange(Student $student, string $action, ?array $oldValues = null, ?array $newValues = null): void
+    {
+        GradeAuditLog::create([
+            'auditable_type' => Student::class,
+            'auditable_id' => $student->id,
+            'user_id' => auth()->id(),
+            'action' => $action,
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
+            'ip_address' => request()->ip(),
+        ]);
     }
 }

@@ -28,16 +28,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transcripts/{student}', [TranscriptController::class, 'show']);
     Route::get('/transcripts/{student}/download', [TranscriptController::class, 'download']);
 
-    Route::prefix('v1')->group(function () {
+    Route::prefix('v1')->middleware('role:admin,lecturer')->group(function () {
         Route::get('/offerings', [OfferingController::class, 'index']);
         Route::get('/offerings/{offering}', [OfferingController::class, 'show']);
-        Route::get('/offerings/{offering}/enrollments', [OfferingController::class, 'enrollments'])
-            ->middleware('role:admin,lecturer');
-        Route::get('/offerings/{offering}/grades', [OfferingController::class, 'grades'])
-            ->middleware('role:admin,lecturer');
-        Route::post('/offerings/{offering}/lab-grades', [OfferingController::class, 'importLabGrades'])
-            ->middleware('role:admin,lecturer');
-        Route::get('/offerings/{offering}/students/{identifier}/grades', [OfferingController::class, 'studentGrades'])
-            ->middleware('role:admin,lecturer');
+        Route::get('/offerings/{offering}/enrollments', [OfferingController::class, 'enrollments']);
+        Route::get('/offerings/{offering}/grades', [OfferingController::class, 'grades']);
+        Route::post('/offerings/{offering}/lab-grades', [OfferingController::class, 'importLabGrades']);
+        Route::get('/offerings/{offering}/students/{identifier}/grades', [OfferingController::class, 'studentGrades']);
     });
 });

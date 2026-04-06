@@ -13,6 +13,7 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Filters\SelectFilter;
@@ -108,7 +109,15 @@ class CourseOfferingResource extends Resource
                                 if ($state !== null && $state !== '') {
                                     $set('exam_weight', round(100 - (float) $state, 2));
                                 }
-                            }),
+                            })
+                            ->rules([
+                                fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                    $sum = bcadd((string) ($value ?? 0), (string) ($get('exam_weight') ?? 0), 2);
+                                    if ($sum !== '100.00') {
+                                        $fail('CA weight and exam weight must sum to 100.');
+                                    }
+                                },
+                            ]),
                         Forms\Components\TextInput::make('exam_weight')
                             ->numeric()
                             ->required()

@@ -14,7 +14,13 @@ class EnrollmentPolicy
 
     public function view(User $user, Enrollment $enrollment): bool
     {
-        return $user->isAdmin() || $user->isLecturer();
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $enrollment->loadMissing('courseOffering');
+
+        return $user->isLecturer() && $enrollment->courseOffering->isLecturerAssigned($user);
     }
 
     public function create(User $user): bool
@@ -24,7 +30,13 @@ class EnrollmentPolicy
 
     public function update(User $user, Enrollment $enrollment): bool
     {
-        return $user->isAdmin() || $user->isLecturer();
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        $enrollment->loadMissing('courseOffering');
+
+        return $user->isLecturer() && $enrollment->courseOffering->isLecturerAssigned($user);
     }
 
     public function delete(User $user, Enrollment $enrollment): bool

@@ -31,6 +31,7 @@ class MyGrades extends Page
 
         $enrollments = Enrollment::query()
             ->where('student_id', $student->id)
+            ->whereHas('courseOffering', fn ($q) => $q->where('is_published', true))
             ->with([
                 'courseOffering.course',
                 'courseOffering.semester.year',

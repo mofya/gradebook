@@ -12,6 +12,9 @@ class StudentsImport implements ToModel, WithHeadingRow
 
     protected int $skipped = 0;
 
+    /** @var array<int, string> */
+    protected array $skippedDetails = [];
+
     /** @var array<int, Student> */
     protected array $importedStudents = [];
 
@@ -76,12 +79,14 @@ class StudentsImport implements ToModel, WithHeadingRow
 
         if (! $firstName || ! $lastName || ! $email) {
             $this->skipped++;
+            $this->skippedDetails[] = 'Row missing required fields (first_name, last_name, or email).';
 
             return null;
         }
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->skipped++;
+            $this->skippedDetails[] = "Invalid email format: '{$email}'.";
 
             return null;
         }
@@ -136,6 +141,14 @@ class StudentsImport implements ToModel, WithHeadingRow
     public function getSkippedCount(): int
     {
         return $this->skipped;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function getSkippedDetails(): array
+    {
+        return $this->skippedDetails;
     }
 
     /**

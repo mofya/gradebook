@@ -152,6 +152,22 @@
                                     <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
+
+                            <div>
+                                <label for="gender" class="block text-sm font-medium text-stone-700">Gender</label>
+                                <select
+                                    wire:model="gender"
+                                    id="gender"
+                                    class="mt-1.5 block w-full rounded-lg border border-stone-300 px-3.5 py-2.5 text-stone-900 shadow-sm transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none"
+                                >
+                                    <option value="">Select...</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                </select>
+                                @error('gender')
+                                    <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
                         </div>
 
                         <div class="mt-6 flex gap-3">

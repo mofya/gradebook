@@ -35,6 +35,8 @@ class StudentVerification extends Component
 
     public string $currentGithub = '';
 
+    public string $gender = '';
+
     public string $errorMessage = '';
 
     public int $backfillCount = 0;
@@ -90,7 +92,7 @@ class StudentVerification extends Component
         $student = Student::where('student_id_number', trim($this->studentIdNumber))->first();
 
         if (! $student) {
-            $this->errorMessage = "We don't have your registration details. Please make sure you are registered for the course and have access to Moodle. Contact your course lecturer with your student ID, full name, and email address.";
+            $this->errorMessage = "We don't have your registration details. Please make sure you are registered for {$this->courseCode} and have access to Moodle. Contact your course lecturer with your student ID, full name, email address, and course ({$this->courseCode}).";
             $this->step = 'not_found';
 
             return;
@@ -101,7 +103,7 @@ class StudentVerification extends Component
             ->exists();
 
         if (! $enrolled) {
-            $this->errorMessage = "You are not enrolled in {$this->courseCode}. Please make sure you are registered for the course and have access to Moodle. Contact your course lecturer with your student ID, full name, and email address.";
+            $this->errorMessage = "You are not enrolled in {$this->courseCode}. Please make sure you are registered for the course and have access to Moodle. Contact your course lecturer with your student ID, full name, email address, and course ({$this->courseCode}).";
             $this->step = 'not_found';
 
             return;
@@ -113,6 +115,7 @@ class StudentVerification extends Component
         $this->currentGithub = $student->github_username ?? '';
         $this->githubUsername = $student->github_username ?? '';
         $this->personalEmail = $student->personal_email ?? '';
+        $this->gender = $student->gender ?? '';
         $this->step = 'found';
     }
 
@@ -121,6 +124,7 @@ class StudentVerification extends Component
         $this->validate([
             'githubUsername' => ['nullable', 'string', 'max:39'],
             'personalEmail' => ['nullable', 'email', 'max:255'],
+            'gender' => ['nullable', 'string', 'in:Male,Female'],
         ]);
 
         $offering = $this->resolveOffering();
@@ -139,6 +143,7 @@ class StudentVerification extends Component
 
         $username = trim($this->githubUsername);
         $email = trim($this->personalEmail);
+        $gender = $this->gender ?: null;
 
         if ($username !== '') {
             try {
@@ -167,11 +172,13 @@ class StudentVerification extends Component
         $oldValues = [
             'github_username' => $student->github_username,
             'personal_email' => $student->personal_email,
+            'gender' => $student->gender,
         ];
 
         $student->update([
             'github_username' => $username ?: null,
             'personal_email' => $email ?: null,
+            'gender' => $gender,
         ]);
 
         GradeAuditLog::create([
@@ -183,6 +190,7 @@ class StudentVerification extends Component
             'new_values' => [
                 'github_username' => $username ?: null,
                 'personal_email' => $email ?: null,
+                'gender' => $gender,
             ],
             'ip_address' => request()->ip(),
         ]);
@@ -198,7 +206,7 @@ class StudentVerification extends Component
 
     public function resetLookup(): void
     {
-        $this->reset(['studentIdNumber', 'githubUsername', 'personalEmail', 'studentName', 'studentEmail', 'currentGithub', 'errorMessage', 'backfillCount']);
+        $this->reset(['studentIdNumber', 'githubUsername', 'personalEmail', 'gender', 'studentName', 'studentEmail', 'currentGithub', 'errorMessage', 'backfillCount']);
         $this->step = 'lookup';
     }
 

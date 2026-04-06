@@ -33,21 +33,23 @@ class ViewCourseOffering extends ViewRecord
                 ->modalDescription(function () {
                     if ($this->record->hasValidVerificationToken()) {
                         $expires = $this->record->verification_expires_at->diffForHumans();
-                        $url = route('student.verify', ['token' => $this->record->verification_token]);
+                        $verifyUrl = route('student.verify', ['token' => $this->record->verification_token]);
+                        $gradesUrl = route('student.grades', ['token' => $this->record->verification_token]);
 
-                        return "Active link (expires {$expires}): {$url}";
+                        return "Active link (expires {$expires}):\nVerify details: {$verifyUrl}\nView grades: {$gradesUrl}";
                     }
 
-                    return 'Generate a shareable link for students to verify and update their details.';
+                    return 'Generate shareable links for students to verify their details and view grades.';
                 })
                 ->modalSubmitActionLabel('Generate Link')
                 ->action(function (array $data) {
                     $this->record->generateVerificationToken((int) $data['expiry_days']);
-                    $url = route('student.verify', ['token' => $this->record->verification_token]);
+                    $verifyUrl = route('student.verify', ['token' => $this->record->verification_token]);
+                    $gradesUrl = route('student.grades', ['token' => $this->record->verification_token]);
 
                     Notification::make()
-                        ->title('Verification link generated.')
-                        ->body($url)
+                        ->title('Links generated.')
+                        ->body("Verify details: {$verifyUrl}\nView grades: {$gradesUrl}")
                         ->success()
                         ->persistent()
                         ->send();

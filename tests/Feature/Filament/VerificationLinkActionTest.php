@@ -41,7 +41,7 @@ class VerificationLinkActionTest extends TestCase
     {
         Livewire::test(EditCourseOffering::class, ['record' => $this->offering->getRouteKey()])
             ->callAction('verification_link', ['expiry_days' => 3])
-            ->assertNotified('Verification link generated.');
+            ->assertNotified('Links generated.');
 
         $this->offering->refresh();
         $this->assertNotNull($this->offering->verification_token);

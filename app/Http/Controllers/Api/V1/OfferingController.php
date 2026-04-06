@@ -8,6 +8,7 @@ use App\Models\AssessmentGroup;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\Student;
+use App\Models\UnmatchedLabGrade;
 use App\Services\LabGradeImportService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
@@ -270,6 +271,175 @@ class OfferingController extends Controller
                     'student_feedback' => $gr->student_feedback,
                     'graded_at' => $gr->updated_at?->toIso8601String(),
                 ]),
+            ],
+        ]);
+    }
+
+    /**
+     * List assessment groups and assessments for an offering.
+     */
+    public function assessments(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        $offering->load('assessmentGroups.assessments');
+
+        return response()->json([
+            'data' => $offering->assessmentGroups->sortBy('sort_order')->values()->map(fn ($g) => [
+                'id' => $g->id,
+                'name' => $g->name,
+                'type' => $g->type,
+                'weight_percentage' => $g->weight_percentage,
+                'assessments' => $g->assessments->sortBy('sort_order')->values()->map(fn ($a) => [
+                    'id' => $a->id,
+                    'name' => $a->name,
+                    'max_raw_score' => $a->max_raw_score,
+                    'normalized_to' => $a->normalized_to,
+                    'has_subsections' => $a->has_subsections,
+                    'sort_order' => $a->sort_order,
+                ]),
+            ]),
+        ]);
+    }
+
+    /**
+     * List unmatched lab grades for an offering.
+     */
+    public function unmatched(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        $items = UnmatchedLabGrade::where('course_offering_id', $offering->id)
+            ->where('status', 'unmatched')
+            ->with('assessment')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'data' => $items->map(fn ($item) => [
+                'id' => $item->id,
+                'github_username' => $item->github_username,
+                'assessment' => $item->assessment->name,
+                'status' => $item->status,
+                'row_data' => $item->row_data,
+                'created_at' => $item->created_at->toIso8601String(),
+            ]),
+        ]);
+    }
+
+    /**
+     * Bulk enroll students by student ID numbers.
+     */
+    public function bulkEnroll(Request $request, CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'required|string',
+            'source' => 'nullable|string',
+        ]);
+
+        $source = $validated['source'] ?? 'api';
+        $enrolled = 0;
+        $alreadyEnrolled = 0;
+        $notFound = [];
+
+        foreach ($validated['student_ids'] as $studentIdNumber) {
+            $student = Student::where('student_id_number', $studentIdNumber)->first();
+
+            if (! $student) {
+                $notFound[] = $studentIdNumber;
+
+                continue;
+            }
+
+            $exists = Enrollment::where('student_id', $student->id)
+                ->where('course_offering_id', $offering->id)
+                ->exists();
+
+            if ($exists) {
+                $alreadyEnrolled++;
+
+                continue;
+            }
+
+            Enrollment::create([
+                'student_id' => $student->id,
+                'course_offering_id' => $offering->id,
+                'source' => $source,
+                'status' => 'enrolled',
+            ]);
+
+            $enrolled++;
+        }
+
+        return response()->json([
+            'data' => [
+                'enrolled' => $enrolled,
+                'already_enrolled' => $alreadyEnrolled,
+                'not_found' => $notFound,
+            ],
+        ]);
+    }
+
+    /**
+     * Transition the offering status (activate/lock/publish).
+     */
+    public function updateStatus(Request $request, CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'action' => 'required|string|in:activate,lock,publish',
+        ]);
+
+        try {
+            match ($validated['action']) {
+                'activate' => $offering->activate(),
+                'lock' => $offering->lock(),
+                'publish' => $offering->publish(),
+            };
+        } catch (\LogicException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $offering->id,
+                'status' => $offering->fresh()->status,
+                'message' => 'Offering '.$validated['action'].'d.',
+            ],
+        ]);
+    }
+
+    /**
+     * Generate or revoke a verification link for the offering.
+     */
+    public function verificationLink(Request $request, CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'action' => 'required|string|in:generate,revoke',
+            'expiry_days' => 'required_if:action,generate|nullable|integer|min:1|max:30',
+        ]);
+
+        if ($validated['action'] === 'revoke') {
+            $offering->revokeVerificationToken();
+
+            return response()->json([
+                'data' => ['message' => 'Verification link revoked.'],
+            ]);
+        }
+
+        $offering->generateVerificationToken((int) $validated['expiry_days']);
+
+        return response()->json([
+            'data' => [
+                'verify_url' => route('student.verify', ['token' => $offering->verification_token]),
+                'grades_url' => route('student.grades', ['token' => $offering->verification_token]),
+                'expires_at' => $offering->verification_expires_at->toIso8601String(),
             ],
         ]);
     }

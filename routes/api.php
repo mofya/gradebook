@@ -35,5 +35,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/offerings/{offering}/grades', [OfferingController::class, 'grades']);
         Route::post('/offerings/{offering}/lab-grades', [OfferingController::class, 'importLabGrades']);
         Route::get('/offerings/{offering}/students/{identifier}/grades', [OfferingController::class, 'studentGrades']);
+        Route::get('/offerings/{offering}/assessments', [OfferingController::class, 'assessments']);
+        Route::get('/offerings/{offering}/unmatched', [OfferingController::class, 'unmatched']);
+        Route::post('/offerings/{offering}/enrollments', [OfferingController::class, 'bulkEnroll']);
+        Route::patch('/offerings/{offering}/status', [OfferingController::class, 'updateStatus']);
+        Route::post('/offerings/{offering}/verification-link', [OfferingController::class, 'verificationLink']);
     });
 });

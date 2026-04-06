@@ -1,11 +1,16 @@
 <?php
 
 use App\Http\Controllers\Web\TranscriptController;
+use App\Livewire\StudentVerification;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/verify/{token}', StudentVerification::class)
+    ->name('student.verify')
+    ->middleware('throttle:30,1');
 
 Route::middleware('auth')->group(function () {
     Route::get('/transcripts/{student}/download', [TranscriptController::class, 'download'])

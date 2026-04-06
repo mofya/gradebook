@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Str;
 
 class CourseOffering extends Model
 {
@@ -25,6 +26,8 @@ class CourseOffering extends Model
         'created_from_offering_id',
         'is_published',
         'published_at',
+        'verification_token',
+        'verification_expires_at',
     ];
 
     protected function casts(): array
@@ -35,6 +38,7 @@ class CourseOffering extends Model
             'status' => OfferingStatus::class,
             'is_published' => 'boolean',
             'published_at' => 'datetime',
+            'verification_expires_at' => 'datetime',
         ];
     }
 
@@ -76,6 +80,50 @@ class CourseOffering extends Model
     public function sourceOffering(): BelongsTo
     {
         return $this->belongsTo(self::class, 'created_from_offering_id');
+    }
+
+    /**
+     * Generate a verification token for the public student verification form.
+     */
+    public function generateVerificationToken(int $days = 3): self
+    {
+        $this->update([
+            'verification_token' => Str::random(64),
+            'verification_expires_at' => now()->addDays($days),
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Revoke the verification token.
+     */
+    public function revokeVerificationToken(): self
+    {
+        $this->update([
+            'verification_token' => null,
+            'verification_expires_at' => null,
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Check if this offering has a valid (non-expired) verification token.
+     */
+    public function hasValidVerificationToken(): bool
+    {
+        return $this->verification_token !== null
+            && $this->verification_expires_at !== null
+            && $this->verification_expires_at->isFuture();
+    }
+
+    /**
+     * Check if the given user is the assigned lecturer for this offering.
+     */
+    public function isLecturerAssigned(User $user): bool
+    {
+        return $this->lecturer_id === $user->id;
     }
 
     /**

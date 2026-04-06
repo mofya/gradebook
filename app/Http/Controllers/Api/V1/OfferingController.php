@@ -2,17 +2,26 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exports\GradeSheetExport;
 use App\Http\Controllers\Controller;
 use App\Models\Assessment;
 use App\Models\AssessmentGroup;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
+use App\Models\GradeAuditLog;
+use App\Models\GradeResult;
 use App\Models\Student;
+use App\Models\SubsectionScore;
 use App\Models\UnmatchedLabGrade;
+use App\Services\BackfillLabGradesService;
+use App\Services\GradingService;
 use App\Services\LabGradeImportService;
+use App\Services\ReportingService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class OfferingController extends Controller
 {
@@ -440,6 +449,322 @@ class OfferingController extends Controller
                 'verify_url' => route('student.verify', ['token' => $offering->verification_token]),
                 'grades_url' => route('student.grades', ['token' => $offering->verification_token]),
                 'expires_at' => $offering->verification_expires_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * Delete all grade results for a specific assessment in an offering.
+     */
+    public function deleteLabGrades(CourseOffering $offering, Assessment $assessment): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        // Verify the assessment belongs to this offering
+        $belongsToOffering = $assessment->assessmentGroup
+            && $assessment->assessmentGroup->course_offering_id === $offering->id;
+
+        if (! $belongsToOffering) {
+            return response()->json(['error' => 'Assessment does not belong to this offering.'], 404);
+        }
+
+        $enrollmentIds = $offering->enrollments()->pluck('id');
+
+        // Delete subsection scores first
+        $gradeResultIds = GradeResult::whereIn('enrollment_id', $enrollmentIds)
+            ->where('assessment_id', $assessment->id)
+            ->pluck('id');
+
+        SubsectionScore::whereIn('grade_result_id', $gradeResultIds)->delete();
+
+        $deletedCount = GradeResult::whereIn('enrollment_id', $enrollmentIds)
+            ->where('assessment_id', $assessment->id)
+            ->delete();
+
+        // Recalculate all grades for the offering
+        app(GradingService::class)->resolveAllGrades($offering);
+
+        return response()->json([
+            'data' => [
+                'deleted' => $deletedCount,
+                'message' => "{$deletedCount} grade result(s) deleted for {$assessment->name}.",
+            ],
+        ]);
+    }
+
+    /**
+     * Update a student's details (GitHub username, personal email) within an offering.
+     */
+    public function updateEnrollment(Request $request, CourseOffering $offering, string $identifier): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'github_username' => 'nullable|string|max:39',
+            'personal_email' => 'nullable|email|max:255',
+        ]);
+
+        $student = Student::where('student_id_number', $identifier)->first()
+            ?? Student::whereRaw('LOWER(github_username) = ?', [strtolower($identifier)])->first();
+
+        if (! $student) {
+            return response()->json(['error' => "Student not found: {$identifier}"], 404);
+        }
+
+        $enrolled = Enrollment::where('student_id', $student->id)
+            ->where('course_offering_id', $offering->id)
+            ->exists();
+
+        if (! $enrolled) {
+            return response()->json(['error' => "Student {$identifier} is not enrolled in this offering."], 404);
+        }
+
+        $username = isset($validated['github_username']) ? trim($validated['github_username']) : null;
+
+        if ($username !== null && $username !== '') {
+            $taken = Student::where('github_username', $username)
+                ->where('id', '!=', $student->id)
+                ->exists();
+
+            if ($taken) {
+                return response()->json(['error' => 'This GitHub username is already linked to another student.'], 422);
+            }
+        }
+
+        $oldValues = [
+            'github_username' => $student->github_username,
+            'personal_email' => $student->personal_email,
+        ];
+
+        $updates = [];
+        if (array_key_exists('github_username', $validated)) {
+            $updates['github_username'] = $username ?: null;
+        }
+        if (array_key_exists('personal_email', $validated)) {
+            $updates['personal_email'] = trim($validated['personal_email']) ?: null;
+        }
+
+        $student->update($updates);
+
+        GradeAuditLog::create([
+            'auditable_type' => Student::class,
+            'auditable_id' => $student->id,
+            'user_id' => auth()->id(),
+            'action' => 'api_enrollment_update',
+            'old_values' => $oldValues,
+            'new_values' => $updates,
+            'ip_address' => $request->ip(),
+        ]);
+
+        $backfillCount = 0;
+        if (isset($updates['github_username']) && $updates['github_username'] && $updates['github_username'] !== $oldValues['github_username']) {
+            $backfill = app(BackfillLabGradesService::class)->backfillForStudent($student);
+            $backfillCount = $backfill['grades_created'] ?? 0;
+        }
+
+        return response()->json([
+            'data' => [
+                'student_id_number' => $student->student_id_number,
+                'github_username' => $student->github_username,
+                'personal_email' => $student->personal_email,
+                'grades_backfilled' => $backfillCount,
+            ],
+        ]);
+    }
+
+    /**
+     * Return aggregated grade statistics for an offering.
+     */
+    public function gradeSummary(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        $report = app(ReportingService::class)->generateOfferingReport($offering);
+
+        return response()->json([
+            'data' => [
+                'stats' => $report['stats'],
+                'distribution' => $report['distribution'],
+                'assessment_stats' => $report['assessment_stats'] ?? [],
+            ],
+        ]);
+    }
+
+    /**
+     * Return a student's full profile and enrollment data for an offering.
+     */
+    public function studentProfile(CourseOffering $offering, string $identifier): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        $student = Student::where('student_id_number', $identifier)->first()
+            ?? Student::whereRaw('LOWER(github_username) = ?', [strtolower($identifier)])->first();
+
+        if (! $student) {
+            return response()->json(['error' => "Student not found: {$identifier}"], 404);
+        }
+
+        $enrollment = Enrollment::where('student_id', $student->id)
+            ->where('course_offering_id', $offering->id)
+            ->first();
+
+        if (! $enrollment) {
+            return response()->json(['error' => "Student {$identifier} is not enrolled in this offering."], 404);
+        }
+
+        return response()->json([
+            'data' => [
+                'student' => [
+                    'student_id_number' => $student->student_id_number,
+                    'first_name' => $student->first_name,
+                    'last_name' => $student->last_name,
+                    'email' => $student->email,
+                    'personal_email' => $student->personal_email,
+                    'github_username' => $student->github_username,
+                    'gender' => $student->gender,
+                    'program' => $student->program,
+                    'year_of_study' => $student->year_of_study,
+                    'study_mode' => $student->study_mode,
+                    'is_registered' => $student->isRegistered(),
+                ],
+                'enrollment' => [
+                    'status' => $enrollment->status,
+                    'source' => $enrollment->source,
+                    'ca_total' => $enrollment->ca_total,
+                    'exam_score' => $enrollment->exam_score,
+                    'final_total' => $enrollment->final_total,
+                    'final_grade' => $enrollment->final_grade,
+                    'grade_points' => $enrollment->grade_points,
+                    'remarks' => $enrollment->remarks,
+                    'enrolled_at' => $enrollment->created_at->toIso8601String(),
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Sync enrollments: enroll new students and flag those not in the incoming list.
+     */
+    public function syncEnrollments(Request $request, CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'required|string',
+            'source' => 'nullable|string',
+        ]);
+
+        $source = $validated['source'] ?? 'moodle_sync';
+        $incomingIds = collect($validated['student_ids']);
+
+        $enrolled = 0;
+        $notFound = [];
+
+        foreach ($incomingIds as $studentIdNumber) {
+            $student = Student::where('student_id_number', $studentIdNumber)->first();
+
+            if (! $student) {
+                $notFound[] = $studentIdNumber;
+
+                continue;
+            }
+
+            $exists = Enrollment::where('student_id', $student->id)
+                ->where('course_offering_id', $offering->id)
+                ->exists();
+
+            if (! $exists) {
+                Enrollment::create([
+                    'student_id' => $student->id,
+                    'course_offering_id' => $offering->id,
+                    'source' => $source,
+                    'status' => 'enrolled',
+                ]);
+                $enrolled++;
+            }
+        }
+
+        // Find students enrolled in gradebook but NOT in the incoming list
+        $incomingStudentIds = Student::whereIn('student_id_number', $incomingIds)
+            ->pluck('id');
+
+        $extraEnrollments = Enrollment::where('course_offering_id', $offering->id)
+            ->whereNotIn('student_id', $incomingStudentIds)
+            ->with('student')
+            ->get();
+
+        $extraStudents = $extraEnrollments->map(fn ($e) => [
+            'student_id_number' => $e->student->student_id_number,
+            'name' => $e->student->first_name.' '.$e->student->last_name,
+            'status' => $e->status,
+        ])->values();
+
+        return response()->json([
+            'data' => [
+                'enrolled' => $enrolled,
+                'not_found' => $notFound,
+                'not_in_source' => $extraStudents,
+            ],
+        ]);
+    }
+
+    /**
+     * Export all grades as a downloadable Excel file.
+     */
+    public function export(CourseOffering $offering): BinaryFileResponse
+    {
+        $this->authorize('view', $offering);
+
+        $code = $offering->course->code ?? 'export';
+        $filename = "{$code}_grade_sheet.xlsx";
+
+        return Excel::download(new GradeSheetExport($offering), $filename);
+    }
+
+    /**
+     * Return the audit changelog for an offering.
+     */
+    public function changelog(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        $enrollmentIds = $offering->enrollments()->pluck('id');
+
+        $gradeResultIds = GradeResult::whereIn('enrollment_id', $enrollmentIds)
+            ->pluck('id');
+
+        $logs = GradeAuditLog::query()
+            ->where(function ($query) use ($enrollmentIds, $gradeResultIds) {
+                $query->where(function ($q) use ($gradeResultIds) {
+                    $q->where('auditable_type', GradeResult::class)
+                        ->whereIn('auditable_id', $gradeResultIds);
+                })->orWhere(function ($q) use ($enrollmentIds) {
+                    $q->where('auditable_type', Enrollment::class)
+                        ->whereIn('auditable_id', $enrollmentIds);
+                });
+            })
+            ->with('user')
+            ->orderBy('created_at', 'desc')
+            ->paginate(50);
+
+        return response()->json([
+            'data' => $logs->map(fn ($log) => [
+                'id' => $log->id,
+                'action' => $log->action,
+                'auditable_type' => class_basename($log->auditable_type),
+                'auditable_id' => $log->auditable_id,
+                'user' => $log->user?->name,
+                'old_values' => $log->old_values,
+                'new_values' => $log->new_values,
+                'reason' => $log->reason,
+                'ip_address' => $log->ip_address,
+                'created_at' => $log->created_at->toIso8601String(),
+            ]),
+            'meta' => [
+                'current_page' => $logs->currentPage(),
+                'last_page' => $logs->lastPage(),
+                'total' => $logs->total(),
             ],
         ]);
     }

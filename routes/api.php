@@ -40,5 +40,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/offerings/{offering}/enrollments', [OfferingController::class, 'bulkEnroll']);
         Route::patch('/offerings/{offering}/status', [OfferingController::class, 'updateStatus']);
         Route::post('/offerings/{offering}/verification-link', [OfferingController::class, 'verificationLink']);
+        Route::delete('/offerings/{offering}/lab-grades/{assessment}', [OfferingController::class, 'deleteLabGrades']);
+        Route::get('/offerings/{offering}/grade-summary', [OfferingController::class, 'gradeSummary']);
+        Route::get('/offerings/{offering}/export', [OfferingController::class, 'export']);
+        Route::get('/offerings/{offering}/changelog', [OfferingController::class, 'changelog']);
+        Route::post('/offerings/{offering}/enrollments/sync', [OfferingController::class, 'syncEnrollments']);
+        Route::get('/offerings/{offering}/students/{identifier}', [OfferingController::class, 'studentProfile']);
+        Route::patch('/offerings/{offering}/enrollments/{identifier}', [OfferingController::class, 'updateEnrollment']);
     });
 });

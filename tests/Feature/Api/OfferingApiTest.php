@@ -585,4 +585,221 @@ class OfferingApiTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    // --- Delete lab grades endpoint ---
+
+    public function test_delete_lab_grades(): void
+    {
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'type' => 'ca',
+        ]);
+
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $this->offering->course_id,
+            'name' => 'Lab to delete',
+        ]);
+
+        $student = Student::factory()->create();
+        $enrollment = Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        GradeResult::factory()->create([
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $assessment->id,
+            'raw_score' => 80,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson('/api/v1/offerings/'.$this->offering->id.'/lab-grades/'.$assessment->id);
+
+        $response->assertOk()
+            ->assertJsonPath('data.deleted', 1);
+
+        $this->assertDatabaseMissing('grade_results', [
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $assessment->id,
+        ]);
+    }
+
+    public function test_delete_lab_grades_returns_404_for_wrong_offering(): void
+    {
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => $this->user->id]);
+        $group = AssessmentGroup::factory()->create(['course_offering_id' => $otherOffering->id]);
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $otherOffering->course_id,
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->deleteJson('/api/v1/offerings/'.$this->offering->id.'/lab-grades/'.$assessment->id)
+            ->assertNotFound();
+    }
+
+    // --- Update enrollment (patch GitHub) endpoint ---
+
+    public function test_update_enrollment_github(): void
+    {
+        $student = Student::factory()->create(['student_id_number' => 'SNPATCH001']);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->patchJson('/api/v1/offerings/'.$this->offering->id.'/enrollments/SNPATCH001', [
+                'github_username' => 'new-github-user',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.github_username', 'new-github-user');
+
+        $this->assertEquals('new-github-user', $student->fresh()->github_username);
+    }
+
+    public function test_update_enrollment_rejects_taken_github(): void
+    {
+        Student::factory()->create(['github_username' => 'taken-user']);
+        $student = Student::factory()->create(['student_id_number' => 'SNPATCH002']);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->patchJson('/api/v1/offerings/'.$this->offering->id.'/enrollments/SNPATCH002', [
+                'github_username' => 'taken-user',
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_update_enrollment_404_for_unenrolled(): void
+    {
+        Student::factory()->create(['student_id_number' => 'SNPATCH003']);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->patchJson('/api/v1/offerings/'.$this->offering->id.'/enrollments/SNPATCH003', [
+                'github_username' => 'some-user',
+            ])
+            ->assertNotFound();
+    }
+
+    // --- Grade summary endpoint ---
+
+    public function test_grade_summary(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/grade-summary');
+
+        $response->assertOk()
+            ->assertJsonStructure(['data' => ['stats', 'distribution', 'assessment_stats']]);
+    }
+
+    // --- Student profile endpoint ---
+
+    public function test_student_profile_by_student_id(): void
+    {
+        $student = Student::factory()->create(['student_id_number' => 'SNPROF001', 'github_username' => 'profuser']);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/students/SNPROF001');
+
+        $response->assertOk()
+            ->assertJsonPath('data.student.student_id_number', 'SNPROF001')
+            ->assertJsonPath('data.student.github_username', 'profuser')
+            ->assertJsonPath('data.enrollment.status', 'enrolled');
+    }
+
+    public function test_student_profile_404_for_unenrolled(): void
+    {
+        Student::factory()->create(['student_id_number' => 'SNPROF002']);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/students/SNPROF002')
+            ->assertNotFound();
+    }
+
+    // --- Sync enrollments endpoint ---
+
+    public function test_sync_enrollments(): void
+    {
+        $existing = Student::factory()->create(['student_id_number' => 'SNSYNC001']);
+        Enrollment::factory()->create([
+            'student_id' => $existing->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $newStudent = Student::factory()->create(['student_id_number' => 'SNSYNC002']);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/enrollments/sync', [
+                'student_ids' => ['SNSYNC002'],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.enrolled', 1)
+            ->assertJsonCount(1, 'data.not_in_source');
+
+        $this->assertDatabaseHas('enrollments', [
+            'student_id' => $newStudent->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+    }
+
+    public function test_sync_enrollments_reports_not_found(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/enrollments/sync', [
+                'student_ids' => ['NONEXISTENT'],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.not_found', ['NONEXISTENT']);
+    }
+
+    // --- Export endpoint ---
+
+    public function test_export_grades(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/export');
+
+        $response->assertOk();
+        $this->assertStringContainsString('spreadsheet', $response->headers->get('content-type'));
+    }
+
+    // --- Changelog endpoint ---
+
+    public function test_changelog(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/changelog');
+
+        $response->assertOk()
+            ->assertJsonStructure(['data', 'meta' => ['current_page', 'last_page', 'total']]);
+    }
+
+    // --- Authorization for new endpoints ---
+
+    public function test_lecturer_cannot_delete_grades_for_another_lecturers_offering(): void
+    {
+        $lecturer = User::factory()->lecturer()->create();
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => User::factory()->lecturer()->create()->id]);
+        $group = AssessmentGroup::factory()->create(['course_offering_id' => $otherOffering->id]);
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $otherOffering->course_id,
+        ]);
+
+        $this->actingAs($lecturer, 'sanctum')
+            ->deleteJson('/api/v1/offerings/'.$otherOffering->id.'/lab-grades/'.$assessment->id)
+            ->assertForbidden();
+    }
 }

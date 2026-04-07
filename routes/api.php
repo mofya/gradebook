@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('v1')->middleware('role:admin,lecturer')->group(function () {
         Route::get('/offerings', [OfferingController::class, 'index']);
+        Route::post('/offerings', [OfferingController::class, 'create']);
         Route::get('/offerings/{offering}', [OfferingController::class, 'show']);
         Route::get('/offerings/{offering}/enrollments', [OfferingController::class, 'enrollments']);
         Route::get('/offerings/{offering}/grades', [OfferingController::class, 'grades']);
@@ -39,6 +40,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/offerings/{offering}/unmatched', [OfferingController::class, 'unmatched']);
         Route::post('/offerings/{offering}/enrollments', [OfferingController::class, 'bulkEnroll']);
         Route::patch('/offerings/{offering}/status', [OfferingController::class, 'updateStatus']);
+        Route::get('/offerings/{offering}/verification-link', [OfferingController::class, 'getVerificationLink']);
         Route::post('/offerings/{offering}/verification-link', [OfferingController::class, 'verificationLink']);
         Route::delete('/offerings/{offering}/lab-grades/{assessment}', [OfferingController::class, 'deleteLabGrades']);
         Route::get('/offerings/{offering}/grade-summary', [OfferingController::class, 'gradeSummary']);

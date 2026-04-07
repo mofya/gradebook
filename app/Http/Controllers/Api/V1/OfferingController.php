@@ -63,6 +63,49 @@ class OfferingController extends Controller
     }
 
     /**
+     * Create a new course offering.
+     */
+    public function create(Request $request): JsonResponse
+    {
+        $this->authorize('create', CourseOffering::class);
+
+        $validated = $request->validate([
+            'course_id' => 'required|exists:courses,id',
+            'semester_id' => 'required|exists:semesters,id',
+            'lecturer_id' => 'nullable|exists:users,id',
+            'grading_scheme_id' => 'nullable|exists:grading_schemes,id',
+            'section' => 'nullable|string|max:50',
+            'ca_weight' => 'required|numeric|min:0|max:100',
+            'exam_weight' => 'required|numeric|min:0|max:100',
+        ]);
+
+        if (bcadd((string) $validated['ca_weight'], (string) $validated['exam_weight'], 2) !== '100.00') {
+            return response()->json(['error' => 'CA weight and exam weight must sum to 100.'], 422);
+        }
+
+        $offering = CourseOffering::create([
+            ...$validated,
+            'status' => 'draft',
+            'is_published' => false,
+        ]);
+
+        $offering->load(['course', 'semester.year', 'lecturer']);
+
+        return response()->json([
+            'data' => [
+                'id' => $offering->id,
+                'course_code' => $offering->course->code,
+                'course_name' => $offering->course->name,
+                'semester' => ($offering->semester->year->name ?? '').' '.$offering->semester->name,
+                'lecturer' => $offering->lecturer?->name,
+                'status' => $offering->status,
+                'ca_weight' => $offering->ca_weight,
+                'exam_weight' => $offering->exam_weight,
+            ],
+        ], 201);
+    }
+
+    /**
      * Show a single course offering with enrollments and assessments.
      */
     public function show(CourseOffering $offering): JsonResponse
@@ -423,15 +466,45 @@ class OfferingController extends Controller
     }
 
     /**
-     * Generate or revoke a verification link for the offering.
+     * View the current verification link status for an offering.
+     */
+    public function getVerificationLink(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        if (! $offering->verification_token) {
+            return response()->json([
+                'data' => [
+                    'active' => false,
+                    'message' => 'No verification link has been generated.',
+                ],
+            ]);
+        }
+
+        $isValid = $offering->hasValidVerificationToken();
+
+        return response()->json([
+            'data' => [
+                'active' => $isValid,
+                'verify_url' => route('student.verify', ['token' => $offering->verification_token]),
+                'grades_url' => route('student.grades', ['token' => $offering->verification_token]),
+                'expires_at' => $offering->verification_expires_at->toIso8601String(),
+                'expired' => ! $isValid,
+                'time_remaining' => $isValid ? $offering->verification_expires_at->diffForHumans() : null,
+            ],
+        ]);
+    }
+
+    /**
+     * Generate, extend, or revoke a verification link for the offering.
      */
     public function verificationLink(Request $request, CourseOffering $offering): JsonResponse
     {
         $this->authorize('update', $offering);
 
         $validated = $request->validate([
-            'action' => 'required|string|in:generate,revoke',
-            'expiry_days' => 'required_if:action,generate|nullable|integer|min:1|max:30',
+            'action' => 'required|string|in:generate,extend,revoke',
+            'expiry_days' => 'required_if:action,generate|required_if:action,extend|nullable|integer|min:1|max:30',
         ]);
 
         if ($validated['action'] === 'revoke') {
@@ -439,6 +512,23 @@ class OfferingController extends Controller
 
             return response()->json([
                 'data' => ['message' => 'Verification link revoked.'],
+            ]);
+        }
+
+        if ($validated['action'] === 'extend') {
+            if (! $offering->verification_token) {
+                return response()->json(['error' => 'No verification token exists to extend.'], 422);
+            }
+
+            $offering->extendVerificationToken((int) $validated['expiry_days']);
+
+            return response()->json([
+                'data' => [
+                    'verify_url' => route('student.verify', ['token' => $offering->verification_token]),
+                    'grades_url' => route('student.grades', ['token' => $offering->verification_token]),
+                    'expires_at' => $offering->verification_expires_at->toIso8601String(),
+                    'message' => 'Verification link extended.',
+                ],
             ]);
         }
 

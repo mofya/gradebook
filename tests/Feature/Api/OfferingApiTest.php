@@ -802,4 +802,88 @@ class OfferingApiTest extends TestCase
             ->deleteJson('/api/v1/offerings/'.$otherOffering->id.'/lab-grades/'.$assessment->id)
             ->assertForbidden();
     }
+
+    // --- Create offering endpoint ---
+
+    public function test_create_offering(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings', [
+                'course_id' => $this->offering->course_id,
+                'semester_id' => $this->offering->semester_id,
+                'ca_weight' => 60,
+                'exam_weight' => 40,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.ca_weight', '60.00')
+            ->assertJsonPath('data.status', 'draft');
+    }
+
+    public function test_create_offering_validates_weight_sum(): void
+    {
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings', [
+                'course_id' => $this->offering->course_id,
+                'semester_id' => $this->offering->semester_id,
+                'ca_weight' => 60,
+                'exam_weight' => 30,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'CA weight and exam weight must sum to 100.');
+    }
+
+    // --- Get verification link endpoint ---
+
+    public function test_get_verification_link_when_active(): void
+    {
+        $this->offering->generateVerificationToken(3);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/verification-link');
+
+        $response->assertOk()
+            ->assertJsonPath('data.active', true)
+            ->assertJsonStructure(['data' => ['verify_url', 'grades_url', 'expires_at', 'time_remaining']]);
+    }
+
+    public function test_get_verification_link_when_none_exists(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/verification-link');
+
+        $response->assertOk()
+            ->assertJsonPath('data.active', false);
+    }
+
+    // --- Extend verification link ---
+
+    public function test_extend_verification_link(): void
+    {
+        $this->offering->generateVerificationToken(3);
+        $originalToken = $this->offering->verification_token;
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/verification-link', [
+                'action' => 'extend',
+                'expiry_days' => 10,
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.message', 'Verification link extended.');
+
+        $this->offering->refresh();
+        $this->assertEquals($originalToken, $this->offering->verification_token);
+        $this->assertTrue($this->offering->verification_expires_at->isAfter(now()->addDays(9)));
+    }
+
+    public function test_extend_fails_when_no_token_exists(): void
+    {
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/verification-link', [
+                'action' => 'extend',
+                'expiry_days' => 5,
+            ])
+            ->assertStatus(422);
+    }
 }

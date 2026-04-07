@@ -55,6 +55,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transcripts/{student}/download', [TranscriptController::class, 'download']);
 
     Route::prefix('v1')->middleware('role:admin,lecturer')->group(function () {
+        Route::post('/students', [OfferingController::class, 'createStudent']);
+        Route::post('/students/bulk', [OfferingController::class, 'bulkCreateStudents']);
         Route::get('/offerings', [OfferingController::class, 'index']);
         Route::post('/offerings', [OfferingController::class, 'create']);
         Route::get('/offerings/{offering}', [OfferingController::class, 'show']);

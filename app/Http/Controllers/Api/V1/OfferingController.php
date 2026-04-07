@@ -13,6 +13,7 @@ use App\Models\GradeResult;
 use App\Models\Student;
 use App\Models\SubsectionScore;
 use App\Models\UnmatchedLabGrade;
+use App\Models\UsernameDispute;
 use App\Services\BackfillLabGradesService;
 use App\Services\GradingService;
 use App\Services\LabGradeImportService;
@@ -1008,6 +1009,142 @@ class OfferingController extends Controller
                 'enrolled' => $enrolled,
                 'errors' => $errors,
             ],
+        ]);
+    }
+
+    /**
+     * Reassign a GitHub username from one student to another.
+     */
+    public function resolveGithub(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'github_username' => 'required|string|max:39',
+            'correct_student_id' => 'required|string',
+            'resolution_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $username = trim($validated['github_username']);
+        $correctStudent = Student::where('student_id_number', $validated['correct_student_id'])->first();
+
+        if (! $correctStudent) {
+            return response()->json(['error' => "Student not found: {$validated['correct_student_id']}"], 404);
+        }
+
+        $currentHolder = Student::where('github_username', $username)->first();
+
+        if (! $currentHolder) {
+            // No conflict — just assign it
+            $correctStudent->update(['github_username' => $username]);
+
+            GradeAuditLog::create([
+                'auditable_type' => Student::class,
+                'auditable_id' => $correctStudent->id,
+                'user_id' => auth()->id(),
+                'action' => 'github_assigned',
+                'old_values' => ['github_username' => $correctStudent->getOriginal('github_username')],
+                'new_values' => ['github_username' => $username],
+                'reason' => $validated['resolution_notes'] ?? null,
+                'ip_address' => $request->ip(),
+            ]);
+
+            $backfill = app(BackfillLabGradesService::class)->backfillForStudent($correctStudent);
+
+            return response()->json([
+                'data' => [
+                    'action' => 'assigned',
+                    'student_id_number' => $correctStudent->student_id_number,
+                    'github_username' => $username,
+                    'previous_holder' => null,
+                    'grades_backfilled' => $backfill['grades_created'] ?? 0,
+                ],
+            ]);
+        }
+
+        if ($currentHolder->id === $correctStudent->id) {
+            return response()->json([
+                'data' => [
+                    'action' => 'no_change',
+                    'message' => 'This student already owns this GitHub username.',
+                ],
+            ]);
+        }
+
+        // Reassign: clear from current holder, assign to correct student
+        $previousHolder = $currentHolder->student_id_number;
+
+        GradeAuditLog::create([
+            'auditable_type' => Student::class,
+            'auditable_id' => $currentHolder->id,
+            'user_id' => auth()->id(),
+            'action' => 'github_removed',
+            'old_values' => ['github_username' => $username],
+            'new_values' => ['github_username' => null],
+            'reason' => "Reassigned to {$correctStudent->student_id_number}. ".($validated['resolution_notes'] ?? ''),
+            'ip_address' => $request->ip(),
+        ]);
+
+        $currentHolder->update(['github_username' => null]);
+        $correctStudent->update(['github_username' => $username]);
+
+        GradeAuditLog::create([
+            'auditable_type' => Student::class,
+            'auditable_id' => $correctStudent->id,
+            'user_id' => auth()->id(),
+            'action' => 'github_reassigned',
+            'old_values' => ['github_username' => $correctStudent->getOriginal('github_username')],
+            'new_values' => ['github_username' => $username],
+            'reason' => "Reassigned from {$previousHolder}. ".($validated['resolution_notes'] ?? ''),
+            'ip_address' => $request->ip(),
+        ]);
+
+        // Resolve any pending disputes for this username
+        UsernameDispute::where('github_username', $username)
+            ->where('status', 'pending')
+            ->update([
+                'status' => 'resolved',
+                'resolved_by' => auth()->id(),
+                'resolved_at' => now(),
+                'resolution_notes' => $validated['resolution_notes'] ?? 'Resolved via API.',
+            ]);
+
+        $backfill = app(BackfillLabGradesService::class)->backfillForStudent($correctStudent);
+
+        return response()->json([
+            'data' => [
+                'action' => 'reassigned',
+                'student_id_number' => $correctStudent->student_id_number,
+                'github_username' => $username,
+                'previous_holder' => $previousHolder,
+                'grades_backfilled' => $backfill['grades_created'] ?? 0,
+            ],
+        ]);
+    }
+
+    /**
+     * List pending username disputes.
+     */
+    public function listDisputes(Request $request): JsonResponse
+    {
+        $disputes = UsernameDispute::with(['claimant', 'currentHolder', 'courseOffering.course'])
+            ->where('status', 'pending')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'data' => $disputes->map(fn ($d) => [
+                'id' => $d->id,
+                'github_username' => $d->github_username,
+                'claimant' => [
+                    'student_id_number' => $d->claimant->student_id_number,
+                    'name' => $d->claimant->first_name.' '.$d->claimant->last_name,
+                ],
+                'current_holder' => [
+                    'student_id_number' => $d->currentHolder->student_id_number,
+                    'name' => $d->currentHolder->first_name.' '.$d->currentHolder->last_name,
+                ],
+                'course' => $d->courseOffering?->course->code,
+                'created_at' => $d->created_at->toIso8601String(),
+            ]),
         ]);
     }
 

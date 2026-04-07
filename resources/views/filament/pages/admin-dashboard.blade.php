@@ -184,6 +184,38 @@
                     @endif
                 </div>
 
+                {{-- Username Disputes --}}
+                @if($pendingDisputes->isNotEmpty())
+                <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
+                    <div class="px-5 py-4 border-b border-gray-100 dark:border-white/5">
+                        <h3 class="text-sm font-semibold text-gray-950 dark:text-white">
+                            Username Disputes
+                            <span class="ml-1 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/30">{{ $pendingDisputes->count() }}</span>
+                        </h3>
+                    </div>
+                    <div class="divide-y divide-gray-50 dark:divide-white/5">
+                        @foreach($pendingDisputes as $dispute)
+                            <div class="px-5 py-3">
+                                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <span class="font-mono text-xs">{{ $dispute->github_username }}</span>
+                                </p>
+                                <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                    Claimed by {{ $dispute->claimant->first_name }} {{ $dispute->claimant->last_name }} ({{ $dispute->claimant->student_id_number }})
+                                </p>
+                                <p class="text-xs text-gray-400 dark:text-gray-500">
+                                    Currently held by {{ $dispute->currentHolder->first_name }} {{ $dispute->currentHolder->last_name }} ({{ $dispute->currentHolder->student_id_number }})
+                                </p>
+                                <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                                    {{ $dispute->courseOffering?->course?->code ?? '' }}
+                                    <span class="mx-0.5">&middot;</span>
+                                    {{ $dispute->created_at->diffForHumans() }}
+                                </p>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                @endif
+
                 {{-- Quick Actions --}}
                 <div class="fi-section rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10 overflow-hidden">
                     <div class="px-5 py-4 border-b border-gray-100 dark:border-white/5">

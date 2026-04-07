@@ -5,13 +5,39 @@ use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\GradeController;
 use App\Http\Controllers\Api\TranscriptController;
 use App\Http\Controllers\Api\V1\OfferingController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\PersonalAccessToken;
 
 Route::post('/login', [AuthController::class, 'login'])
     ->middleware('throttle:5,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/v1/me', function (Request $request) {
+        $user = $request->user();
+        $token = $user->currentAccessToken();
+
+        $tokenData = [];
+        if ($token instanceof PersonalAccessToken) {
+            $tokenData = [
+                'token_name' => $token->name,
+                'token_last_used_at' => $token->last_used_at?->toIso8601String(),
+                'token_created_at' => $token->created_at->toIso8601String(),
+            ];
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                ...$tokenData,
+            ],
+        ]);
+    });
 
     // Courses — any authenticated user can view
     Route::get('/courses', [CourseController::class, 'index']);

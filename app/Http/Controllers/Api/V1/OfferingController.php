@@ -860,6 +860,158 @@ class OfferingController extends Controller
     }
 
     /**
+     * Create a student and optionally enroll them in an offering.
+     */
+    public function createStudent(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'student_id_number' => 'required|string|max:20',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'gender' => 'nullable|string|in:Male,Female',
+            'program' => 'nullable|string|max:255',
+            'year_of_study' => 'nullable|integer|min:1|max:7',
+            'study_mode' => 'nullable|string|max:50',
+            'github_username' => 'nullable|string|max:39',
+            'offering_id' => 'nullable|exists:course_offerings,id',
+        ]);
+
+        $existing = Student::where('student_id_number', $validated['student_id_number'])->first();
+
+        if ($existing) {
+            // Update existing student with any new fields
+            $updates = collect($validated)
+                ->except(['student_id_number', 'offering_id'])
+                ->filter(fn ($value) => $value !== null)
+                ->all();
+
+            if (! empty($updates)) {
+                $existing->update($updates);
+            }
+
+            $student = $existing->fresh();
+            $created = false;
+        } else {
+            // Check email uniqueness
+            if (Student::whereRaw('LOWER(email) = ?', [strtolower($validated['email'])])->exists()) {
+                return response()->json(['error' => "Email '{$validated['email']}' is already in use by another student."], 422);
+            }
+
+            $student = Student::create(collect($validated)->except(['offering_id'])->all());
+            $created = true;
+        }
+
+        $enrolled = false;
+        if (! empty($validated['offering_id'])) {
+            $exists = Enrollment::where('student_id', $student->id)
+                ->where('course_offering_id', $validated['offering_id'])
+                ->exists();
+
+            if (! $exists) {
+                Enrollment::create([
+                    'student_id' => $student->id,
+                    'course_offering_id' => $validated['offering_id'],
+                    'source' => 'api',
+                    'status' => 'enrolled',
+                ]);
+                $enrolled = true;
+            }
+        }
+
+        return response()->json([
+            'data' => [
+                'student_id_number' => $student->student_id_number,
+                'first_name' => $student->first_name,
+                'last_name' => $student->last_name,
+                'email' => $student->email,
+                'github_username' => $student->github_username,
+                'gender' => $student->gender,
+                'program' => $student->program,
+                'year_of_study' => $student->year_of_study,
+                'created' => $created,
+                'enrolled' => $enrolled,
+            ],
+        ], $created ? 201 : 200);
+    }
+
+    /**
+     * Bulk create students and optionally enroll them in an offering.
+     */
+    public function bulkCreateStudents(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'students' => 'required|array|min:1',
+            'students.*.student_id_number' => 'required|string|max:20',
+            'students.*.first_name' => 'required|string|max:255',
+            'students.*.last_name' => 'required|string|max:255',
+            'students.*.email' => 'required|email|max:255',
+            'students.*.gender' => 'nullable|string|in:Male,Female',
+            'students.*.program' => 'nullable|string|max:255',
+            'students.*.year_of_study' => 'nullable|integer|min:1|max:7',
+            'students.*.github_username' => 'nullable|string|max:39',
+            'offering_id' => 'nullable|exists:course_offerings,id',
+        ]);
+
+        $created = 0;
+        $updated = 0;
+        $enrolled = 0;
+        $errors = [];
+
+        foreach ($validated['students'] as $index => $data) {
+            $existing = Student::where('student_id_number', $data['student_id_number'])->first();
+
+            if ($existing) {
+                $updates = collect($data)
+                    ->except(['student_id_number'])
+                    ->filter(fn ($value) => $value !== null)
+                    ->all();
+
+                if (! empty($updates)) {
+                    $existing->update($updates);
+                }
+
+                $student = $existing;
+                $updated++;
+            } else {
+                if (Student::whereRaw('LOWER(email) = ?', [strtolower($data['email'])])->exists()) {
+                    $errors[] = "Row {$index}: Email '{$data['email']}' already in use.";
+
+                    continue;
+                }
+
+                $student = Student::create($data);
+                $created++;
+            }
+
+            if (! empty($validated['offering_id'])) {
+                $exists = Enrollment::where('student_id', $student->id)
+                    ->where('course_offering_id', $validated['offering_id'])
+                    ->exists();
+
+                if (! $exists) {
+                    Enrollment::create([
+                        'student_id' => $student->id,
+                        'course_offering_id' => $validated['offering_id'],
+                        'source' => 'api',
+                        'status' => 'enrolled',
+                    ]);
+                    $enrolled++;
+                }
+            }
+        }
+
+        return response()->json([
+            'data' => [
+                'created' => $created,
+                'updated' => $updated,
+                'enrolled' => $enrolled,
+                'errors' => $errors,
+            ],
+        ]);
+    }
+
+    /**
      * Find or create an assessment for the offering.
      */
     private function resolveAssessment(CourseOffering $offering, string $name): Assessment

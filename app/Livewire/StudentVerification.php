@@ -150,6 +150,8 @@ class StudentVerification extends Component
         $email = trim($this->personalEmail);
         $gender = $this->gender ?: null;
 
+        $githubConflict = false;
+
         if ($username !== '') {
             try {
                 $response = Http::connectTimeout(3)->timeout(5)->get("https://api.github.com/users/{$username}");
@@ -170,11 +172,10 @@ class StudentVerification extends Component
             if ($taken) {
                 $this->addError('githubUsername', 'This GitHub username is already linked to another student.');
                 $this->showDisputeOption = true;
-
-                return;
+                $githubConflict = true;
+            } else {
+                $this->showDisputeOption = false;
             }
-
-            $this->showDisputeOption = false;
         }
 
         $oldValues = [
@@ -183,11 +184,17 @@ class StudentVerification extends Component
             'gender' => $student->gender,
         ];
 
-        $student->update([
-            'github_username' => $username ?: null,
+        $updates = [
             'personal_email' => $email ?: null,
             'gender' => $gender,
-        ]);
+        ];
+
+        // Only update GitHub if there's no conflict
+        if (! $githubConflict) {
+            $updates['github_username'] = $username ?: null;
+        }
+
+        $student->update($updates);
 
         GradeAuditLog::create([
             'auditable_type' => Student::class,
@@ -195,21 +202,19 @@ class StudentVerification extends Component
             'user_id' => null,
             'action' => 'verification_form_update',
             'old_values' => $oldValues,
-            'new_values' => [
-                'github_username' => $username ?: null,
-                'personal_email' => $email ?: null,
-                'gender' => $gender,
-            ],
+            'new_values' => $updates,
             'ip_address' => request()->ip(),
         ]);
 
         $this->backfillCount = 0;
-        if ($username !== '' && $username !== $oldValues['github_username']) {
+        if (! $githubConflict && $username !== '' && $username !== $oldValues['github_username']) {
             $backfill = app(BackfillLabGradesService::class)->backfillForStudent($student);
             $this->backfillCount = $backfill['grades_created'] ?? 0;
         }
 
-        $this->step = 'updated';
+        if (! $githubConflict) {
+            $this->step = 'updated';
+        }
     }
 
     public function fileDispute(): void

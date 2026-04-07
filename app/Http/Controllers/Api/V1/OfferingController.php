@@ -1061,10 +1061,20 @@ class OfferingController extends Controller
         }
 
         if ($currentHolder->id === $correctStudent->id) {
+            // Still resolve any pending disputes for this username
+            UsernameDispute::where('github_username', $username)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'resolved',
+                    'resolved_by' => auth()->id(),
+                    'resolved_at' => now(),
+                    'resolution_notes' => $validated['resolution_notes'] ?? 'Confirmed current owner is correct.',
+                ]);
+
             return response()->json([
                 'data' => [
                     'action' => 'no_change',
-                    'message' => 'This student already owns this GitHub username.',
+                    'message' => 'This student already owns this GitHub username. Pending disputes resolved.',
                 ],
             ]);
         }

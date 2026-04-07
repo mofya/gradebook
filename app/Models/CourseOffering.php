@@ -109,6 +109,22 @@ class CourseOffering extends Model
     }
 
     /**
+     * Extend the verification token expiry without changing the token itself.
+     */
+    public function extendVerificationToken(int $days): self
+    {
+        if (! $this->verification_token) {
+            throw new \LogicException('No verification token exists to extend.');
+        }
+
+        $this->update([
+            'verification_expires_at' => now()->addDays($days),
+        ]);
+
+        return $this;
+    }
+
+    /**
      * Check if this offering has a valid (non-expired) verification token.
      */
     public function hasValidVerificationToken(): bool

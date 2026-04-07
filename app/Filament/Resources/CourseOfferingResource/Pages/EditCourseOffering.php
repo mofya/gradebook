@@ -126,16 +126,17 @@ class EditCourseOffering extends EditRecord
                 ->modalHeading('Student Verification Link')
                 ->modalDescription(function () {
                     if ($this->record->hasValidVerificationToken()) {
-                        $expires = $this->record->verification_expires_at->diffForHumans();
+                        $expires = $this->record->verification_expires_at->format('M j, Y g:ia');
+                        $remaining = $this->record->verification_expires_at->diffForHumans();
                         $verifyUrl = route('student.verify', ['token' => $this->record->verification_token]);
                         $gradesUrl = route('student.grades', ['token' => $this->record->verification_token]);
 
-                        return "Active link (expires {$expires}):\nVerify details: {$verifyUrl}\nView grades: {$gradesUrl}";
+                        return "Active link (expires {$expires} — {$remaining}):\nVerify details: {$verifyUrl}\nView grades: {$gradesUrl}";
                     }
 
                     return 'Generate shareable links for students to verify their details and view grades.';
                 })
-                ->modalSubmitActionLabel('Generate Link')
+                ->modalSubmitActionLabel(fn () => $this->record->hasValidVerificationToken() ? 'Regenerate Link' : 'Generate Link')
                 ->action(function (array $data) {
                     $this->record->generateVerificationToken((int) $data['expiry_days']);
                     $verifyUrl = route('student.verify', ['token' => $this->record->verification_token]);
@@ -149,6 +150,29 @@ class EditCourseOffering extends EditRecord
                         ->send();
                 })
                 ->extraModalFooterActions([
+                    Actions\Action::make('extend_link')
+                        ->label('Extend Expiry')
+                        ->color('warning')
+                        ->visible(fn () => $this->record->hasValidVerificationToken())
+                        ->schema([
+                            Forms\Components\TextInput::make('extend_days')
+                                ->label('Extend by (days from now)')
+                                ->numeric()
+                                ->default(7)
+                                ->minValue(1)
+                                ->maxValue(30)
+                                ->required(),
+                        ])
+                        ->action(function (array $data) {
+                            $this->record->extendVerificationToken((int) $data['extend_days']);
+                            $expires = $this->record->verification_expires_at->format('M j, Y g:ia');
+
+                            Notification::make()
+                                ->title('Link expiry extended.')
+                                ->body("New expiry: {$expires}")
+                                ->success()
+                                ->send();
+                        }),
                     Actions\Action::make('revoke_link')
                         ->label('Revoke Link')
                         ->color('danger')

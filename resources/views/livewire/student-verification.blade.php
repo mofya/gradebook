@@ -136,6 +136,23 @@
                                 @error('githubUsername')
                                     <p class="mt-1.5 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
+                                @if ($showDisputeOption)
+                                    <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                        <p class="text-sm text-amber-800">If this is your GitHub account, you can file a dispute and your lecturer will review it.</p>
+                                        <button
+                                            type="button"
+                                            wire:click="fileDispute"
+                                            class="mt-2 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700"
+                                        >
+                                            This is my username — file dispute
+                                        </button>
+                                    </div>
+                                @endif
+                                @if ($disputeFiled)
+                                    <div class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                        <p class="text-sm text-emerald-800">Dispute filed. Your lecturer has been notified and will review this. You can continue without a GitHub username for now.</p>
+                                    </div>
+                                @endif
                             </div>
 
                             <div>

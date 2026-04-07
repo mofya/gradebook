@@ -2,11 +2,14 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\EnrollmentTrendsChart;
+use App\Filament\Widgets\GradeDistributionChart;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\GradeAuditLog;
 use App\Models\GradeQuery;
 use App\Models\Student;
+use App\Models\UsernameDispute;
 use App\Models\Year;
 use Filament\Pages\Dashboard as BaseDashboard;
 
@@ -17,8 +20,8 @@ class AdminDashboard extends BaseDashboard
     public function getFooterWidgets(): array
     {
         return [
-            \App\Filament\Widgets\GradeDistributionChart::class,
-            \App\Filament\Widgets\EnrollmentTrendsChart::class,
+            GradeDistributionChart::class,
+            EnrollmentTrendsChart::class,
         ];
     }
 
@@ -104,15 +107,23 @@ class AdminDashboard extends BaseDashboard
             ->limit(5)
             ->get();
 
+        $pendingDisputes = UsernameDispute::with(['claimant', 'currentHolder', 'courseOffering.course'])
+            ->where('status', 'pending')
+            ->latest()
+            ->limit(5)
+            ->get();
+
         return [
             'totalStudents' => $totalStudents,
             'currentEnrollments' => $currentEnrollments,
             'studentsWithGrades' => $studentsWithGrades,
             'openQueries' => $openQueries,
+            'pendingDisputeCount' => $pendingDisputes->count(),
             'currentYear' => $currentYear,
             'offeringStats' => $offeringStats,
             'recentActivity' => $recentActivity,
             'pendingQueries' => $pendingQueries,
+            'pendingDisputes' => $pendingDisputes,
         ];
     }
 }

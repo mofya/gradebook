@@ -6,6 +6,7 @@ use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\GradeAuditLog;
 use App\Models\Student;
+use App\Models\UsernameDispute;
 use App\Services\BackfillLabGradesService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
@@ -40,6 +41,10 @@ class StudentVerification extends Component
     public string $errorMessage = '';
 
     public int $backfillCount = 0;
+
+    public bool $showDisputeOption = false;
+
+    public bool $disputeFiled = false;
 
     protected ?int $courseOfferingId = null;
 
@@ -164,9 +169,12 @@ class StudentVerification extends Component
 
             if ($taken) {
                 $this->addError('githubUsername', 'This GitHub username is already linked to another student.');
+                $this->showDisputeOption = true;
 
                 return;
             }
+
+            $this->showDisputeOption = false;
         }
 
         $oldValues = [
@@ -204,9 +212,60 @@ class StudentVerification extends Component
         $this->step = 'updated';
     }
 
+    public function fileDispute(): void
+    {
+        $username = trim($this->githubUsername);
+
+        if ($username === '') {
+            return;
+        }
+
+        $offering = $this->resolveOffering();
+        if (! $offering) {
+            $this->step = 'expired';
+
+            return;
+        }
+
+        $student = Student::where('student_id_number', trim($this->studentIdNumber))->first();
+        if (! $student) {
+            return;
+        }
+
+        $currentHolder = Student::where('github_username', $username)->first();
+        if (! $currentHolder) {
+            return;
+        }
+
+        // Prevent duplicate disputes
+        $existingDispute = UsernameDispute::where('claimant_student_id', $student->id)
+            ->where('github_username', $username)
+            ->where('status', 'pending')
+            ->exists();
+
+        if ($existingDispute) {
+            $this->disputeFiled = true;
+            $this->showDisputeOption = false;
+
+            return;
+        }
+
+        UsernameDispute::create([
+            'claimant_student_id' => $student->id,
+            'current_holder_student_id' => $currentHolder->id,
+            'github_username' => $username,
+            'course_offering_id' => $offering->id,
+            'status' => 'pending',
+            'ip_address' => request()->ip(),
+        ]);
+
+        $this->disputeFiled = true;
+        $this->showDisputeOption = false;
+    }
+
     public function resetLookup(): void
     {
-        $this->reset(['studentIdNumber', 'githubUsername', 'personalEmail', 'gender', 'studentName', 'studentEmail', 'currentGithub', 'errorMessage', 'backfillCount']);
+        $this->reset(['studentIdNumber', 'githubUsername', 'personalEmail', 'gender', 'studentName', 'studentEmail', 'currentGithub', 'errorMessage', 'backfillCount', 'showDisputeOption', 'disputeFiled']);
         $this->step = 'lookup';
     }
 

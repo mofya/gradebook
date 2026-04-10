@@ -428,7 +428,7 @@
                             wire:loading.attr="disabled"
                         >
                             <span wire:loading.remove wire:target="verifyStudent">Verify</span>
-                            <span wire:loading wire:target="verifyStudent" style="display: inline-flex; align-items: center; gap: 8px;">
+                            <span wire:loading wire:target="verifyStudent" style="display: none; align-items: center; gap: 8px;">
                                 <svg class="gs-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
@@ -495,10 +495,21 @@
                         </div>
                     </div>
 
+                    @if ($errorMessage)
+                        <div class="gs-alert-warning" style="margin-top: 16px;">
+                            <div style="display: flex; gap: 10px; align-items: start;">
+                                <svg style="width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; color: #92400e;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                </svg>
+                                <p style="font-size: 13px; color: #92400e; margin: 0; line-height: 1.5;">{{ $errorMessage }}</p>
+                            </div>
+                        </div>
+                    @endif
+
                     <div class="gs-btn-actions">
                         <button
                             type="button"
-                            wire:click="resetLookup"
+                            wire:click="confirmDetails"
                             class="gs-btn-secondary"
                         >
                             This looks correct
@@ -599,7 +610,7 @@
                             wire:loading.attr="disabled"
                         >
                             <span wire:loading.remove wire:target="updateDetails">Save Details</span>
-                            <span wire:loading wire:target="updateDetails" style="display: inline-flex; align-items: center; gap: 8px;">
+                            <span wire:loading wire:target="updateDetails" style="display: none; align-items: center; gap: 8px;">
                                 <svg class="gs-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                     <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                     <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>

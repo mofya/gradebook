@@ -124,8 +124,30 @@ class StudentVerification extends Component
         $this->step = 'review';
     }
 
+    public function confirmDetails(): void
+    {
+        $missing = [];
+
+        if (! $this->currentGithub) {
+            $missing[] = 'GitHub username';
+        }
+
+        if (! $this->gender) {
+            $missing[] = 'gender';
+        }
+
+        if ($missing) {
+            $this->errorMessage = 'Please update your '.implode(' and ', $missing).' before confirming.';
+
+            return;
+        }
+
+        $this->resetLookup();
+    }
+
     public function proceedToEdit(): void
     {
+        $this->errorMessage = '';
         $this->step = 'found';
     }
 

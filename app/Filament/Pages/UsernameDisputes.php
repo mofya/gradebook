@@ -31,7 +31,19 @@ class UsernameDisputes extends Page
 
     public static function getNavigationBadge(): ?string
     {
-        $count = UsernameDispute::where('status', 'pending')->count();
+        $user = auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $query = UsernameDispute::where('status', 'pending');
+
+        if ($user->isLecturer()) {
+            $query->whereHas('courseOffering', fn ($q) => $q->where('lecturer_id', $user->id));
+        }
+
+        $count = $query->count();
 
         return $count > 0 ? (string) $count : null;
     }

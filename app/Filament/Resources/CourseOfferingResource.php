@@ -268,6 +268,7 @@ class CourseOfferingResource extends Resource
             'enter-exam-grades' => Pages\EnterExamGrades::route('/{record}/enter-exam-grades'),
             'import-grades' => Pages\ImportGrades::route('/{record}/import-grades'),
             'class-gradebook' => Pages\ClassGradebook::route('/{record}/class-gradebook'),
+            'manage-links' => Pages\ManageLinks::route('/{record}/manage-links'),
         ];
     }
 }

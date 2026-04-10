@@ -39,4 +39,12 @@ class CourseOfferingFactory extends Factory
             'verification_expires_at' => now()->addDays($days),
         ]);
     }
+
+    public function withPublicGradeToken(int $days = 7): static
+    {
+        return $this->state(fn () => [
+            'public_grade_token' => Str::random(64),
+            'public_grade_token_expires_at' => now()->addDays($days),
+        ]);
+    }
 }

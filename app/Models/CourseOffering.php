@@ -28,6 +28,8 @@ class CourseOffering extends Model
         'published_at',
         'verification_token',
         'verification_expires_at',
+        'public_grade_token',
+        'public_grade_token_expires_at',
     ];
 
     protected function casts(): array
@@ -39,6 +41,7 @@ class CourseOffering extends Model
             'is_published' => 'boolean',
             'published_at' => 'datetime',
             'verification_expires_at' => 'datetime',
+            'public_grade_token_expires_at' => 'datetime',
         ];
     }
 
@@ -132,6 +135,58 @@ class CourseOffering extends Model
         return $this->verification_token !== null
             && $this->verification_expires_at !== null
             && $this->verification_expires_at->isFuture();
+    }
+
+    /**
+     * Generate a public grade token for the class grade sheet.
+     */
+    public function generatePublicGradeToken(int $days = 7): self
+    {
+        $this->update([
+            'public_grade_token' => Str::random(64),
+            'public_grade_token_expires_at' => now()->addDays($days),
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Revoke the public grade token.
+     */
+    public function revokePublicGradeToken(): self
+    {
+        $this->update([
+            'public_grade_token' => null,
+            'public_grade_token_expires_at' => null,
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Extend the public grade token expiry without changing the token itself.
+     */
+    public function extendPublicGradeToken(int $days): self
+    {
+        if (! $this->public_grade_token) {
+            throw new \LogicException('No public grade token exists to extend.');
+        }
+
+        $this->update([
+            'public_grade_token_expires_at' => now()->addDays($days),
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Check if this offering has a valid (non-expired) public grade token.
+     */
+    public function hasValidPublicGradeToken(): bool
+    {
+        return $this->public_grade_token !== null
+            && $this->public_grade_token_expires_at !== null
+            && $this->public_grade_token_expires_at->isFuture();
     }
 
     /**

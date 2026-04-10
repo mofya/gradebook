@@ -123,6 +123,9 @@ class StudentResource extends Resource
                             ->placeholder('Not provided'),
                         TextEntry::make('gender')
                             ->placeholder('Not specified'),
+                        TextEntry::make('github_username')
+                            ->label('GitHub Username')
+                            ->placeholder('Not set'),
                     ])
                     ->columns(2),
 
@@ -306,7 +309,7 @@ class StudentResource extends Resource
     public static function getRelations(): array
     {
         return [
-            RelationManagers\CoursesRelationManager::class,
+            RelationManagers\EnrollmentsRelationManager::class,
         ];
     }
 

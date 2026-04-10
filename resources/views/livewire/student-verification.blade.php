@@ -462,14 +462,13 @@
                     </button>
                 </div>
 
-            {{-- Step: Found --}}
-            @elseif ($step === 'found')
-                {{-- Student info (read-only) --}}
-                <div class="gs-body" style="padding-bottom: 0;">
+            {{-- Step: Review --}}
+            @elseif ($step === 'review')
+                <div class="gs-body">
                     <h2 class="gs-title" style="font-size: 22px; color: var(--gs-text); margin: 0;">Hello, {{ $studentName }}</h2>
-                    <p style="font-size: 14px; color: var(--gs-text-muted); margin: 6px 0 0 0;">Please review and update your details below.</p>
+                    <p style="font-size: 14px; color: var(--gs-text-muted); margin: 6px 0 0 0;">Here is what we have on file for you. Please check that your details are correct.</p>
 
-                    <div style="margin-top: 20px;">
+                    <div style="margin-top: 24px; background: var(--gs-row-alt); border-radius: 8px; padding: 4px 16px;">
                         <div class="gs-info-row">
                             <span class="gs-info-label">Student ID</span>
                             <span class="gs-info-value gs-mono">{{ $studentIdNumber }}</span>
@@ -478,20 +477,48 @@
                             <span class="gs-info-label">Email</span>
                             <span class="gs-info-value">{{ $studentEmail }}</span>
                         </div>
-                        @if ($currentGithub)
-                            <div class="gs-info-row">
-                                <span class="gs-info-label">Current GitHub</span>
-                                <span class="gs-info-value gs-mono">{{ $currentGithub }}</span>
-                            </div>
-                        @endif
+                        <div class="gs-info-row">
+                            <span class="gs-info-label">GitHub Username</span>
+                            @if ($currentGithub)
+                                <span class="gs-info-value gs-mono" style="color: var(--gs-accent);">{{ $currentGithub }}</span>
+                            @else
+                                <span style="font-size: 13px; color: var(--gs-text-faint); font-style: italic;">Not set</span>
+                            @endif
+                        </div>
+                        <div class="gs-info-row">
+                            <span class="gs-info-label">Gender</span>
+                            @if ($gender)
+                                <span class="gs-info-value">{{ $gender }}</span>
+                            @else
+                                <span style="font-size: 13px; color: var(--gs-text-faint); font-style: italic;">Not set</span>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="gs-btn-actions">
+                        <button
+                            type="button"
+                            wire:click="resetLookup"
+                            class="gs-btn-secondary"
+                        >
+                            This looks correct
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="proceedToEdit"
+                            class="gs-btn-primary"
+                        >
+                            Update my details
+                        </button>
                     </div>
                 </div>
 
-                <hr class="gs-divider">
-
+            {{-- Step: Found (Edit form) --}}
+            @elseif ($step === 'found')
                 {{-- Editable fields --}}
-                <form wire:submit="updateDetails" class="gs-body" style="padding-top: 24px;">
-                    <p class="gs-section-label">Update Your Details</p>
+                <form wire:submit="updateDetails" class="gs-body">
+                    <h2 class="gs-title" style="font-size: 22px; color: var(--gs-text); margin: 0 0 6px 0;">Update Your Details</h2>
+                    <p style="font-size: 14px; color: var(--gs-text-muted); margin: 0 0 24px 0;">Make changes below and save when you're done.</p>
 
                     <div class="gs-field-group">
                         <label for="githubUsername" class="gs-label">GitHub Username</label>
@@ -561,7 +588,7 @@
                     <div class="gs-btn-actions">
                         <button
                             type="button"
-                            wire:click="resetLookup"
+                            wire:click="$set('step', 'review')"
                             class="gs-btn-secondary"
                         >
                             Back

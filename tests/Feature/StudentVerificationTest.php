@@ -68,7 +68,7 @@ class StudentVerificationTest extends TestCase
         Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
             ->set('studentIdNumber', 'SN111000001')
             ->call('verifyStudent')
-            ->assertSet('step', 'found')
+            ->assertSet('step', 'review')
             ->assertSet('studentName', $student->first_name.' '.$student->last_name)
             ->assertSet('studentEmail', $student->email);
     }
@@ -106,6 +106,9 @@ class StudentVerificationTest extends TestCase
         Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
             ->set('studentIdNumber', 'SN111000003')
             ->call('verifyStudent')
+            ->assertSet('step', 'review')
+            ->call('proceedToEdit')
+            ->assertSet('step', 'found')
             ->set('githubUsername', 'newuser')
             ->set('personalEmail', 'newuser@gmail.com')
             ->call('updateDetails')
@@ -131,6 +134,7 @@ class StudentVerificationTest extends TestCase
         Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
             ->set('studentIdNumber', 'SN111000004')
             ->call('verifyStudent')
+            ->call('proceedToEdit')
             ->set('githubUsername', 'doesnotexist999')
             ->call('updateDetails')
             ->assertHasErrors('githubUsername');
@@ -152,6 +156,7 @@ class StudentVerificationTest extends TestCase
         Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
             ->set('studentIdNumber', 'SN111000005')
             ->call('verifyStudent')
+            ->call('proceedToEdit')
             ->set('githubUsername', 'taken')
             ->call('updateDetails')
             ->assertHasErrors('githubUsername');
@@ -172,6 +177,7 @@ class StudentVerificationTest extends TestCase
         Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
             ->set('studentIdNumber', 'SN111000006')
             ->call('verifyStudent')
+            ->call('proceedToEdit')
             ->set('githubUsername', 'audituser')
             ->call('updateDetails');
 
@@ -194,6 +200,8 @@ class StudentVerificationTest extends TestCase
         Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
             ->set('studentIdNumber', 'SN111000007')
             ->call('verifyStudent')
+            ->assertSet('step', 'review')
+            ->call('proceedToEdit')
             ->assertSet('step', 'found')
             ->call('resetLookup')
             ->assertSet('step', 'lookup')

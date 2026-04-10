@@ -121,6 +121,11 @@ class StudentVerification extends Component
         $this->githubUsername = $student->github_username ?? '';
         $this->personalEmail = $student->personal_email ?? '';
         $this->gender = $student->gender ?? '';
+        $this->step = 'review';
+    }
+
+    public function proceedToEdit(): void
+    {
         $this->step = 'found';
     }
 

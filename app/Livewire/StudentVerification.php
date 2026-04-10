@@ -46,6 +46,8 @@ class StudentVerification extends Component
 
     public bool $disputeFiled = false;
 
+    public bool $hasPendingDispute = false;
+
     protected ?int $courseOfferingId = null;
 
     protected ?int $studentId = null;
@@ -121,6 +123,9 @@ class StudentVerification extends Component
         $this->githubUsername = $student->github_username ?? '';
         $this->personalEmail = $student->personal_email ?? '';
         $this->gender = $student->gender ?? '';
+        $this->hasPendingDispute = UsernameDispute::where('claimant_student_id', $student->id)
+            ->where('status', 'pending')
+            ->exists();
         $this->step = 'review';
     }
 
@@ -128,7 +133,7 @@ class StudentVerification extends Component
     {
         $missing = [];
 
-        if (! $this->currentGithub) {
+        if (! $this->currentGithub && ! $this->hasPendingDispute) {
             $missing[] = 'GitHub username';
         }
 
@@ -297,7 +302,7 @@ class StudentVerification extends Component
 
     public function resetLookup(): void
     {
-        $this->reset(['studentIdNumber', 'githubUsername', 'personalEmail', 'gender', 'studentName', 'studentEmail', 'currentGithub', 'errorMessage', 'backfillCount', 'showDisputeOption', 'disputeFiled']);
+        $this->reset(['studentIdNumber', 'githubUsername', 'personalEmail', 'gender', 'studentName', 'studentEmail', 'currentGithub', 'errorMessage', 'backfillCount', 'showDisputeOption', 'disputeFiled', 'hasPendingDispute']);
         $this->step = 'lookup';
     }
 

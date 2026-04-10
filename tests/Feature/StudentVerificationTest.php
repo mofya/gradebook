@@ -8,6 +8,7 @@ use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Models\UsernameDispute;
 use App\Models\Year;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -187,6 +188,94 @@ class StudentVerificationTest extends TestCase
             'action' => 'verification_form_update',
             'user_id' => null,
         ]);
+    }
+
+    public function test_confirm_blocked_when_github_missing(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => 'SN111000010',
+            'github_username' => null,
+            'gender' => 'Male',
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
+            ->set('studentIdNumber', 'SN111000010')
+            ->call('verifyStudent')
+            ->assertSet('step', 'review')
+            ->call('confirmDetails')
+            ->assertSet('step', 'review')
+            ->assertSet('errorMessage', 'Please update your GitHub username before confirming.');
+    }
+
+    public function test_confirm_blocked_when_gender_missing(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => 'SN111000011',
+            'github_username' => 'testuser',
+            'gender' => null,
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
+            ->set('studentIdNumber', 'SN111000011')
+            ->call('verifyStudent')
+            ->assertSet('step', 'review')
+            ->call('confirmDetails')
+            ->assertSet('step', 'review')
+            ->assertSet('errorMessage', 'Please update your gender before confirming.');
+    }
+
+    public function test_confirm_allowed_when_both_fields_present(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => 'SN111000012',
+            'github_username' => 'testuser2',
+            'gender' => 'Female',
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
+            ->set('studentIdNumber', 'SN111000012')
+            ->call('verifyStudent')
+            ->assertSet('step', 'review')
+            ->call('confirmDetails')
+            ->assertSet('step', 'lookup');
+    }
+
+    public function test_confirm_allowed_with_pending_dispute_and_no_github(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => 'SN111000013',
+            'github_username' => null,
+            'gender' => 'Male',
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        UsernameDispute::factory()->create([
+            'claimant_student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+            'status' => 'pending',
+        ]);
+
+        Livewire::test(StudentVerification::class, ['token' => $this->offering->verification_token])
+            ->set('studentIdNumber', 'SN111000013')
+            ->call('verifyStudent')
+            ->assertSet('hasPendingDispute', true)
+            ->call('confirmDetails')
+            ->assertSet('step', 'lookup');
     }
 
     public function test_reset_lookup_returns_to_lookup_step(): void

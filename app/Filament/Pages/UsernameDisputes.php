@@ -22,6 +22,13 @@ class UsernameDisputes extends Page
 
     protected string $view = 'filament.pages.username-disputes';
 
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        return $user && ($user->isAdmin() || $user->isLecturer());
+    }
+
     public static function getNavigationBadge(): ?string
     {
         $count = UsernameDispute::where('status', 'pending')->count();
@@ -36,12 +43,21 @@ class UsernameDisputes extends Page
 
     public function getViewData(): array
     {
-        $disputes = UsernameDispute::with([
+        $user = auth()->user();
+
+        $query = UsernameDispute::with([
             'claimant',
             'currentHolder',
             'courseOffering.course',
             'resolvedByUser',
-        ])
+        ]);
+
+        // Lecturers only see disputes for their own offerings
+        if ($user->isLecturer()) {
+            $query->whereHas('courseOffering', fn ($q) => $q->where('lecturer_id', $user->id));
+        }
+
+        $disputes = $query
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
             ->orderBy('created_at', 'desc')
             ->get();
@@ -53,7 +69,14 @@ class UsernameDisputes extends Page
 
     public function assignToClaimant(int $disputeId): void
     {
-        $dispute = UsernameDispute::with(['claimant', 'currentHolder'])->findOrFail($disputeId);
+        $dispute = UsernameDispute::with(['claimant', 'currentHolder', 'courseOffering'])->findOrFail($disputeId);
+
+        $user = auth()->user();
+        if ($user->isLecturer() && ! $dispute->courseOffering->isLecturerAssigned($user)) {
+            Notification::make()->title('You are not authorized to resolve this dispute.')->danger()->send();
+
+            return;
+        }
 
         if ($dispute->status !== 'pending') {
             Notification::make()->title('This dispute has already been resolved.')->warning()->send();
@@ -102,6 +125,17 @@ class UsernameDisputes extends Page
             'resolution_notes' => 'Assigned to claimant via admin UI.',
         ]);
 
+        // Close other pending disputes for the same username
+        UsernameDispute::where('github_username', $username)
+            ->where('id', '!=', $dispute->id)
+            ->where('status', 'pending')
+            ->update([
+                'status' => 'rejected',
+                'resolved_by' => auth()->id(),
+                'resolved_at' => now(),
+                'resolution_notes' => "Auto-rejected: username assigned to {$claimant->student_id_number} via dispute #{$dispute->id}.",
+            ]);
+
         // Backfill lab grades
         $backfill = app(BackfillLabGradesService::class)->backfillForStudent($claimant);
 
@@ -115,7 +149,14 @@ class UsernameDisputes extends Page
 
     public function keepCurrentHolder(int $disputeId): void
     {
-        $dispute = UsernameDispute::findOrFail($disputeId);
+        $dispute = UsernameDispute::with('courseOffering')->findOrFail($disputeId);
+
+        $user = auth()->user();
+        if ($user->isLecturer() && ! $dispute->courseOffering->isLecturerAssigned($user)) {
+            Notification::make()->title('You are not authorized to resolve this dispute.')->danger()->send();
+
+            return;
+        }
 
         if ($dispute->status !== 'pending') {
             Notification::make()->title('This dispute has already been resolved.')->warning()->send();

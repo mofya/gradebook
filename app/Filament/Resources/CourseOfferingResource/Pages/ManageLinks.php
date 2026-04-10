@@ -19,6 +19,8 @@ class ManageLinks extends Page
     public function mount(int|string $record): void
     {
         $this->offering = CourseOffering::with(['course', 'semester.year'])->findOrFail($record);
+
+        $this->authorize('update', $this->offering);
     }
 
     public function getTitle(): string

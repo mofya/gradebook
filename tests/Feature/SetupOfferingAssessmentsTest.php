@@ -81,6 +81,43 @@ class SetupOfferingAssessmentsTest extends TestCase
         $this->artisan("app:setup-offering-assessments 9999999 --spec-base64={$b64}")->assertFailed();
     }
 
+    public function test_renames_existing_assessment_when_rename_from_specified(): void
+    {
+        $course = Course::factory()->create();
+        $offering = CourseOffering::factory()->create(['course_id' => $course->id]);
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'name' => 'Labs',
+        ]);
+        $original = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $course->id,
+            'name' => 'Lab 03 - Data Structures',
+        ]);
+
+        $spec = [
+            'groups' => [
+                [
+                    'name' => 'Labs',
+                    'weight_percentage' => 5,
+                    'assessments' => [
+                        [
+                            'name' => 'Lab 03 - Lists and Dictionaries',
+                            'rename_from' => 'Lab 03 - Data Structures',
+                            'max_raw_score' => 100,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $b64 = base64_encode(json_encode($spec));
+
+        $this->artisan("app:setup-offering-assessments {$offering->id} --spec-base64={$b64}")->assertSuccessful();
+
+        $this->assertEquals('Lab 03 - Lists and Dictionaries', $original->fresh()->name);
+        $this->assertEquals(1, $group->assessments()->count());
+    }
+
     public function test_reads_spec_from_file(): void
     {
         $course = Course::factory()->create();

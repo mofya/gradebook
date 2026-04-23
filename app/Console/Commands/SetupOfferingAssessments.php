@@ -170,6 +170,22 @@ class SetupOfferingAssessments extends Command
             return;
         }
 
+        $renameFrom = $aSpec['rename_from'] ?? null;
+        if ($renameFrom) {
+            $toRename = Assessment::where('assessment_group_id', $group->id)
+                ->where('name', $renameFrom)
+                ->first();
+
+            if ($toRename) {
+                $this->line("  Assessment rename: '{$renameFrom}' → '{$name}'");
+                if (! $dryRun) {
+                    $toRename->update(['name' => $name]);
+                }
+
+                return;
+            }
+        }
+
         $this->line("  Assessment create: {$name} (max={$attributes['max_raw_score']})");
         if (! $dryRun) {
             Assessment::create(array_merge($attributes, [

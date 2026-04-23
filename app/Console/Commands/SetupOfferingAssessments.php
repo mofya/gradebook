@@ -172,14 +172,25 @@ class SetupOfferingAssessments extends Command
 
         $renameFrom = $aSpec['rename_from'] ?? null;
         if ($renameFrom) {
-            $toRename = Assessment::where('assessment_group_id', $group->id)
+            // Look anywhere in the offering — lets the spec move an assessment
+            // across groups (e.g. out of a misfiled parent group) while
+            // preserving its ID and grade_results.
+            $toRename = Assessment::whereHas(
+                'assessmentGroup',
+                fn ($q) => $q->where('course_offering_id', $offering->id),
+            )
                 ->where('name', $renameFrom)
                 ->first();
 
             if ($toRename) {
-                $this->line("  Assessment rename: '{$renameFrom}' → '{$name}'");
+                $moveAcrossGroups = $toRename->assessment_group_id !== $group->id;
+                $verb = $moveAcrossGroups ? 'move+rename' : 'rename';
+                $this->line("  Assessment {$verb}: '{$renameFrom}' → '{$name}'");
                 if (! $dryRun) {
-                    $toRename->update(['name' => $name]);
+                    $toRename->update([
+                        'name' => $name,
+                        'assessment_group_id' => $group->id,
+                    ]);
                 }
 
                 return;

@@ -118,6 +118,48 @@ class SetupOfferingAssessmentsTest extends TestCase
         $this->assertEquals(1, $group->assessments()->count());
     }
 
+    public function test_rename_from_can_move_assessment_across_groups(): void
+    {
+        $course = Course::factory()->create();
+        $offering = CourseOffering::factory()->create(['course_id' => $course->id]);
+
+        $oldGroup = AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'name' => 'Labs',
+        ]);
+        $misfiled = Assessment::factory()->create([
+            'assessment_group_id' => $oldGroup->id,
+            'course_id' => $course->id,
+            'name' => 'Assignment 1 (Portfolio)',
+        ]);
+
+        $spec = [
+            'groups' => [
+                [
+                    'name' => 'Assignments',
+                    'weight_percentage' => 10,
+                    'assessments' => [
+                        [
+                            'name' => 'Assignment 1: Portfolio Website',
+                            'rename_from' => 'Assignment 1 (Portfolio)',
+                            'max_raw_score' => 100,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $b64 = base64_encode(json_encode($spec));
+
+        $this->artisan("app:setup-offering-assessments {$offering->id} --spec-base64={$b64}")->assertSuccessful();
+
+        $assignments = AssessmentGroup::where('course_offering_id', $offering->id)->where('name', 'Assignments')->firstOrFail();
+        $fresh = $misfiled->fresh();
+
+        $this->assertEquals('Assignment 1: Portfolio Website', $fresh->name);
+        $this->assertEquals($assignments->id, $fresh->assessment_group_id);
+        $this->assertEquals($misfiled->id, $fresh->id, 'Assessment ID must be preserved');
+    }
+
     public function test_reads_spec_from_file(): void
     {
         $course = Course::factory()->create();

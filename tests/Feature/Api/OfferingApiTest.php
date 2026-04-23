@@ -135,6 +135,69 @@ class OfferingApiTest extends TestCase
             ->assertJsonPath('data.grades_imported', 1);
     }
 
+    public function test_import_lab_grades_matches_by_student_id_number(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => '2023000645',
+            'github_username' => null,
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/lab-grades', [
+                'assessment_name' => 'Lab by Student ID',
+                'grades' => [
+                    ['student_id' => '2023000645', 'final_score' => 77.5],
+                ],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.grades_imported', 1)
+            ->assertJsonPath('data.skipped', 0);
+    }
+
+    public function test_import_lab_grades_prefers_student_id_over_github_username(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => '2023000645',
+            'github_username' => 'primary-handle',
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/lab-grades', [
+                'assessment_name' => 'Lab SID Priority',
+                'grades' => [
+                    [
+                        'student_id' => '2023000645',
+                        'github_username' => 'stale-bad-handle',
+                        'final_score' => 88,
+                    ],
+                ],
+            ]);
+
+        $response->assertOk()->assertJsonPath('data.grades_imported', 1);
+    }
+
+    public function test_import_lab_grades_validation_requires_student_id_or_github_username(): void
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/lab-grades', [
+                'assessment_name' => 'No Identifier',
+                'grades' => [
+                    ['final_score' => 90],
+                ],
+            ]);
+
+        $response->assertUnprocessable();
+    }
+
     public function test_import_lab_grades_requires_admin_or_lecturer(): void
     {
         $studentUser = User::factory()->student()->create();

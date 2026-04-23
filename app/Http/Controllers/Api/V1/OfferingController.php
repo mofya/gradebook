@@ -229,7 +229,8 @@ class OfferingController extends Controller
         $validated = $request->validate([
             'assessment_name' => 'required|string',
             'grades' => 'required|array|min:1',
-            'grades.*.github_username' => 'required|string',
+            'grades.*.github_username' => 'nullable|required_without:grades.*.student_id|string',
+            'grades.*.student_id' => 'nullable|required_without:grades.*.github_username|string',
             'grades.*.final_score' => 'required|numeric|min:0|max:100',
             'grades.*.visible_tests' => 'nullable|numeric|min:0|max:100',
             'grades.*.hidden_tests' => 'nullable|numeric|min:0|max:100',
@@ -244,7 +245,8 @@ class OfferingController extends Controller
 
         // Convert JSON grades to the CSV row format that LabGradeImportService expects
         $rows = collect($validated['grades'])->map(fn ($grade) => [
-            'GitHub Username' => $grade['github_username'],
+            'GitHub Username' => $grade['github_username'] ?? '',
+            'Student ID' => $grade['student_id'] ?? '',
             'Final Score (%)' => (string) $grade['final_score'],
             'Visible Tests (%)' => (string) ($grade['visible_tests'] ?? 0),
             'Hidden Tests (%)' => (string) ($grade['hidden_tests'] ?? 0),

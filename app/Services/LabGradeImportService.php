@@ -126,28 +126,44 @@ class LabGradeImportService
             $stats['subsections_created'] = $subsections->filter(fn ($s) => $s->wasRecentlyCreated)->count();
 
             // Build student lookup: github_username (lowercase) => enrollment
-            $enrollments = $courseOffering->enrollments()
+            $enrollmentsWithStudent = $courseOffering->enrollments()
                 ->with('student')
-                ->get()
-                ->keyBy(fn (Enrollment $e) => strtolower($e->student->github_username ?? ''));
+                ->get();
 
-            // Also build manual mapping lookup: student_id => enrollment
+            $enrollments = $enrollmentsWithStudent->keyBy(
+                fn (Enrollment $e) => strtolower($e->student->github_username ?? '')
+            );
+
+            // Student ID number (e.g. "2023000645") lookup
+            $enrollmentsByStudentIdNumber = $enrollmentsWithStudent->keyBy(
+                fn (Enrollment $e) => (string) ($e->student->student_id_number ?? '')
+            );
+
+            // Also build manual mapping lookup: student_id => enrollment (PK, for manualMappings)
             $enrollmentsByStudentId = $courseOffering->enrollments()
                 ->get()
                 ->keyBy('student_id');
 
             foreach ($rows as $index => $row) {
                 $githubUsername = trim($row['GitHub Username'] ?? '');
-                if (blank($githubUsername)) {
+                $studentIdNumber = trim($row['Student ID'] ?? '');
+
+                if (blank($githubUsername) && blank($studentIdNumber)) {
                     $stats['skipped']++;
 
                     continue;
                 }
 
-                // Find enrollment via github_username or manual mapping
-                $enrollment = $enrollments->get(strtolower($githubUsername));
+                // Prefer student_id_number match (exact, stable) then github_username.
+                $enrollment = null;
+                if (filled($studentIdNumber)) {
+                    $enrollment = $enrollmentsByStudentIdNumber->get($studentIdNumber);
+                }
+                if (! $enrollment && filled($githubUsername)) {
+                    $enrollment = $enrollments->get(strtolower($githubUsername));
+                }
 
-                if (! $enrollment && isset($manualMappings[$githubUsername])) {
+                if (! $enrollment && filled($githubUsername) && isset($manualMappings[$githubUsername])) {
                     $studentId = $manualMappings[$githubUsername];
                     $enrollment = $enrollmentsByStudentId->get($studentId);
 
@@ -158,12 +174,18 @@ class LabGradeImportService
                 }
 
                 if (! $enrollment) {
-                    // Store unmatched row for future auto-matching
+                    // Store unmatched row for future auto-matching. Use the
+                    // github_username as key if available; otherwise derive
+                    // a synthesized key from the student_id_number.
+                    $unmatchedKey = filled($githubUsername)
+                        ? strtolower($githubUsername)
+                        : 'sid:'.$studentIdNumber;
+
                     UnmatchedLabGrade::updateOrCreate(
                         [
                             'course_offering_id' => $courseOffering->id,
                             'assessment_id' => $assessment->id,
-                            'github_username' => strtolower($githubUsername),
+                            'github_username' => $unmatchedKey,
                         ],
                         [
                             'row_data' => $row,

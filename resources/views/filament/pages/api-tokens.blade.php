@@ -19,6 +19,18 @@
                         class="fi-input block w-full rounded-lg border-none bg-white py-1.5 text-base text-gray-950 outline-none transition duration-75 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-600 disabled:text-gray-500 disabled:[-webkit-text-fill-color:theme(colors.gray.500)] disabled:placeholder:[-webkit-text-fill-color:theme(colors.gray.400)] dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:disabled:text-gray-400 dark:disabled:[-webkit-text-fill-color:theme(colors.gray.400)] dark:disabled:placeholder:[-webkit-text-fill-color:theme(colors.gray.500)] sm:text-sm sm:leading-6 ring-1 ring-gray-950/10 dark:ring-white/20 px-3"
                     />
                 </div>
+                <div class="w-40">
+                    <label for="tokenValidity" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valid for</label>
+                    <select
+                        wire:model="tokenValidityMinutes"
+                        id="tokenValidity"
+                        class="fi-input block w-full rounded-lg border-none bg-white py-1.5 text-base text-gray-950 outline-none transition duration-75 focus:ring-2 focus:ring-primary-600 dark:bg-white/5 dark:text-white sm:text-sm sm:leading-6 ring-1 ring-gray-950/10 dark:ring-white/20 px-3"
+                    >
+                        @foreach($this->validityOptions as $minutes => $label)
+                            <option value="{{ $minutes }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
                 <button
                     wire:click="createToken"
                     class="fi-btn fi-btn-size-md relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus-visible:ring-2 rounded-lg fi-btn-color-primary gap-1.5 px-3 py-2 text-sm inline-grid shadow-sm bg-primary-600 text-white hover:bg-primary-500 focus-visible:ring-primary-500/50 dark:bg-primary-500 dark:hover:bg-primary-400 dark:focus-visible:ring-primary-400/50"
@@ -62,6 +74,7 @@
                     <tr class="border-b border-gray-100 dark:border-white/5">
                         <th class="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Name</th>
                         <th class="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Created</th>
+                        <th class="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Expires</th>
                         <th class="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Last Used</th>
                         <th class="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-wider text-gray-400 dark:text-gray-500">Actions</th>
                     </tr>
@@ -77,6 +90,17 @@
                             </td>
                             <td class="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                                 {{ $token->created_at->format('M d, Y H:i') }}
+                            </td>
+                            <td class="px-4 py-3 text-xs whitespace-nowrap">
+                                @if($token->expires_at)
+                                    @if($token->expires_at->isPast())
+                                        <span class="text-red-500 dark:text-red-400">Expired {{ $token->expires_at->diffForHumans() }}</span>
+                                    @else
+                                        <span class="text-gray-500 dark:text-gray-400" title="{{ $token->expires_at->format('M d, Y H:i') }}">{{ $token->expires_at->diffForHumans() }}</span>
+                                    @endif
+                                @else
+                                    <span class="text-gray-300 dark:text-gray-600">No expiry set</span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 text-xs whitespace-nowrap">
                                 @if($token->last_used_at)
@@ -98,7 +122,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
+                            <td colspan="5" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
                                 No API tokens yet. Create one above to get started.
                             </td>
                         </tr>

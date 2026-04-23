@@ -22,7 +22,25 @@ class ApiTokens extends Page
 
     public string $tokenName = '';
 
+    public int $tokenValidityMinutes = 1440;
+
     public ?string $plainTextToken = null;
+
+    /**
+     * Validity options exposed in the UI: minutes => human label.
+     *
+     * @return array<int, string>
+     */
+    public function getValidityOptionsProperty(): array
+    {
+        return [
+            60 => '1 hour',
+            1440 => '24 hours',
+            10080 => '7 days',
+            43200 => '30 days',
+            525600 => '1 year',
+        ];
+    }
 
     public function getTokensProperty(): Collection
     {
@@ -44,7 +62,16 @@ class ApiTokens extends Page
             return;
         }
 
-        $token = auth()->user()->createToken($name);
+        $validityOptions = $this->getValidityOptionsProperty();
+        $minutes = array_key_exists($this->tokenValidityMinutes, $validityOptions)
+            ? $this->tokenValidityMinutes
+            : 1440;
+
+        $token = auth()->user()->createToken(
+            $name,
+            ['*'],
+            now()->addMinutes($minutes),
+        );
 
         $this->plainTextToken = $token->plainTextToken;
         $this->tokenName = '';

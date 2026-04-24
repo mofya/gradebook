@@ -9,6 +9,8 @@ use App\Models\Course;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\GradeResult;
+use App\Models\GradingScheme;
+use App\Models\GradingSchemeLevel;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Year;
@@ -354,6 +356,83 @@ class PublicClassGradesTest extends TestCase
 
         $this->assertCount(1, $component->get('students'));
         $this->assertEquals('findme-user', $component->get('students')[0]['github_username']);
+    }
+
+    public function test_ca_totals_compute_with_group_weights(): void
+    {
+        $scheme = GradingScheme::factory()->create();
+        foreach ([
+            ['letter' => 'A', 'min' => 80, 'max' => 100, 'points' => 4.0],
+            ['letter' => 'B', 'min' => 60, 'max' => 79, 'points' => 3.0],
+            ['letter' => 'C', 'min' => 40, 'max' => 59, 'points' => 2.0],
+            ['letter' => 'D', 'min' => 0, 'max' => 39, 'points' => 1.0],
+        ] as $lvl) {
+            GradingSchemeLevel::factory()->create([
+                'grading_scheme_id' => $scheme->id,
+                'letter' => $lvl['letter'],
+                'min_mark' => $lvl['min'],
+                'max_mark' => $lvl['max'],
+                'grade_points' => $lvl['points'],
+            ]);
+        }
+
+        $offering = CourseOffering::factory()->withPublicGradeToken()->create([
+            'ca_weight' => 40,
+            'exam_weight' => 60,
+            'grading_scheme_id' => $scheme->id,
+        ]);
+
+        $labs = AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+            'name' => 'Labs',
+            'weight_percentage' => 10,
+        ]);
+        $quizzes = AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+            'name' => 'Quizzes',
+            'weight_percentage' => 10,
+        ]);
+
+        $lab1 = Assessment::factory()->create([
+            'assessment_group_id' => $labs->id,
+            'course_id' => $offering->course_id,
+            'max_raw_score' => 100,
+        ]);
+        $quiz1 = Assessment::factory()->create([
+            'assessment_group_id' => $quizzes->id,
+            'course_id' => $offering->course_id,
+            'max_raw_score' => 30,
+        ]);
+
+        $student = Student::factory()->create(['student_id_number' => 'CGCA1']);
+        $enrollment = Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $offering->id,
+        ]);
+
+        GradeResult::factory()->create([
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $lab1->id,
+            'raw_score' => 80, // 80% of max 100
+        ]);
+        GradeResult::factory()->create([
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $quiz1->id,
+            'raw_score' => 21, // 70% of max 30
+        ]);
+
+        $component = Livewire::test(PublicClassGrades::class, ['token' => $offering->public_grade_token])
+            ->assertSet('step', 'loaded')
+            ->assertSet('caWeight', 40.0);
+
+        $row = $component->get('students')[0];
+        // Labs group contributes 80% × 10 = 8 points; Quizzes 70% × 10 = 7 points.
+        // CA total = 15 (out of 40). Out of 100 = 37.5 → letter D.
+        $this->assertEquals(15.0, $row['ca_points']);
+        $this->assertEquals(37.5, $row['ca_out_of_100']);
+        $this->assertEquals('D', $row['ca_grade']);
     }
 
     public function test_search_shows_no_match_message(): void

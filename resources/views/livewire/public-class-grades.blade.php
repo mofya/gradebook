@@ -203,6 +203,19 @@
                                         <div style="font-weight: 400; font-size: 0.625rem; opacity: 0.45; margin-top: 2px;">out of {{ number_format($col['max_score'], 0) }}</div>
                                     </th>
                                 @endforeach
+
+                                {{-- CA totals --}}
+                                <th style="text-align: center; font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; min-width: 90px; border-left: 2px solid var(--gs-border);">
+                                    <div style="line-height: 1.3;">CA</div>
+                                    <div style="font-weight: 400; font-size: 0.625rem; opacity: 0.45; margin-top: 2px;">out of {{ number_format($caWeight, 0) }}</div>
+                                </th>
+                                <th style="text-align: center; font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; min-width: 90px;">
+                                    <div style="line-height: 1.3;">CA %</div>
+                                    <div style="font-weight: 400; font-size: 0.625rem; opacity: 0.45; margin-top: 2px;">out of 100</div>
+                                </th>
+                                <th style="text-align: center; font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; min-width: 80px;">
+                                    CA grade
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -253,10 +266,51 @@
                                             @endif
                                         </td>
                                     @endforeach
+
+                                    {{-- CA out of weight --}}
+                                    <td style="text-align: center; border-left: 2px solid var(--gs-border);">
+                                        <span class="gs-mono" style="font-size: 0.8125rem; font-weight: 600; color: var(--gs-text);">
+                                            {{ number_format($student['ca_points'] ?? 0, 2) }}
+                                        </span>
+                                    </td>
+
+                                    {{-- CA % out of 100 --}}
+                                    <td style="text-align: center;">
+                                        @php
+                                            $caPct = $student['ca_out_of_100'];
+                                            if ($caPct === null) {
+                                                $caBg = 'transparent';
+                                            } elseif ($caPct >= 70) {
+                                                $caBg = 'var(--gs-score-high)';
+                                            } elseif ($caPct >= 40) {
+                                                $caBg = 'var(--gs-score-mid)';
+                                            } else {
+                                                $caBg = 'var(--gs-score-low)';
+                                            }
+                                        @endphp
+                                        @if ($caPct !== null)
+                                            <span class="gs-score-cell gs-mono" style="background: {{ $caBg }}; font-size: 0.8125rem; font-weight: 600; color: var(--gs-text);">
+                                                {{ number_format($caPct, 1) }}
+                                            </span>
+                                        @else
+                                            <span style="color: var(--gs-text-faint);">-</span>
+                                        @endif
+                                    </td>
+
+                                    {{-- CA grade --}}
+                                    <td style="text-align: center;">
+                                        @if (! empty($student['ca_grade']))
+                                            <span class="gs-mono" style="display: inline-block; padding: 2px 10px; border-radius: 4px; background: var(--gs-header); color: #fff; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;">
+                                                {{ $student['ca_grade'] }}
+                                            </span>
+                                        @else
+                                            <span style="color: var(--gs-text-faint);">-</span>
+                                        @endif
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="{{ count($assessmentColumns) + 3 }}" style="padding: 3rem 1rem; text-align: center; color: var(--gs-text-muted); font-size: 0.875rem;">
+                                    <td colspan="{{ count($assessmentColumns) + 6 }}" style="padding: 3rem 1rem; text-align: center; color: var(--gs-text-muted); font-size: 0.875rem;">
                                         @if ($search)
                                             No students found matching <strong>"{{ $search }}"</strong>
                                         @else

@@ -9,6 +9,8 @@ use App\Models\Course;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
 use App\Models\GradeResult;
+use App\Models\MissedAssessmentAppeal;
+use App\Models\MissedAssessmentAppealItem;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\SubsectionScore;
@@ -133,6 +135,44 @@ class OfferingApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('message', 'Lab grades imported successfully.')
             ->assertJsonPath('data.grades_imported', 1);
+    }
+
+    public function test_appeals_endpoint_returns_appeals_with_items(): void
+    {
+        $student = Student::factory()->create([
+            'student_id_number' => '2023000999',
+            'first_name' => 'Test',
+            'last_name' => 'Student',
+            'email' => 'teststudent@example.com',
+        ]);
+        Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+        $group = AssessmentGroup::factory()->create(['course_offering_id' => $this->offering->id]);
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'name' => 'Lab Test',
+        ]);
+
+        $appeal = MissedAssessmentAppeal::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'student_id' => $student->id,
+            'narrative' => 'Hospitalised.',
+        ]);
+        MissedAssessmentAppealItem::factory()->create([
+            'missed_assessment_appeal_id' => $appeal->id,
+            'assessment_id' => $assessment->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/appeals');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.student_id_number', '2023000999')
+            ->assertJsonPath('data.0.student_email', 'teststudent@example.com')
+            ->assertJsonPath('data.0.narrative', 'Hospitalised.')
+            ->assertJsonPath('data.0.items.0.assessment_name', 'Lab Test');
     }
 
     public function test_import_lab_grades_matches_by_student_id_number(): void

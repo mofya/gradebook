@@ -80,6 +80,11 @@ class CourseOffering extends Model
         return $this->hasManyThrough(Assessment::class, AssessmentGroup::class);
     }
 
+    public function missedAssessmentAppeals(): HasMany
+    {
+        return $this->hasMany(MissedAssessmentAppeal::class);
+    }
+
     public function sourceOffering(): BelongsTo
     {
         return $this->belongsTo(self::class, 'created_from_offering_id');

@@ -666,6 +666,41 @@ class OfferingController extends Controller
     }
 
     /**
+     * List missed-assessment appeals for an offering.
+     */
+    public function appeals(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        $appeals = $offering->missedAssessmentAppeals()
+            ->with(['student', 'items.assessment'])
+            ->orderByDesc('submitted_at')
+            ->get();
+
+        return response()->json([
+            'data' => $appeals->map(fn ($appeal) => [
+                'id' => $appeal->id,
+                'student_id_number' => $appeal->student->student_id_number,
+                'student_name' => trim(($appeal->student->first_name ?? '').' '.($appeal->student->last_name ?? '')),
+                'student_email' => $appeal->student->email,
+                'narrative' => $appeal->narrative,
+                'other_notes' => $appeal->other_notes,
+                'dean_confirmed' => (bool) $appeal->dean_confirmed,
+                'has_evidence' => (bool) $appeal->evidence_path,
+                'status' => $appeal->status,
+                'submitted_at' => $appeal->submitted_at?->toIso8601String(),
+                'reviewed_at' => $appeal->reviewed_at?->toIso8601String(),
+                'items' => $appeal->items->map(fn ($item) => [
+                    'assessment_id' => $item->assessment_id,
+                    'assessment_name' => $item->assessment->name ?? null,
+                    'status' => $item->status,
+                    'reviewer_notes' => $item->reviewer_notes,
+                ]),
+            ])->values(),
+        ]);
+    }
+
+    /**
      * Return aggregated grade statistics for an offering.
      */
     public function gradeSummary(CourseOffering $offering): JsonResponse

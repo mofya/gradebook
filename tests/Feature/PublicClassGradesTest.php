@@ -358,6 +358,39 @@ class PublicClassGradesTest extends TestCase
         $this->assertEquals('findme-user', $component->get('students')[0]['github_username']);
     }
 
+    public function test_ca_weight_derived_from_groups_ignores_stale_offering_field(): void
+    {
+        // Offering says ca_weight=40 but groups only sum to 20 — component should trust the groups.
+        $offering = CourseOffering::factory()->withPublicGradeToken()->create([
+            'ca_weight' => 40,
+            'exam_weight' => 60,
+        ]);
+
+        AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+            'weight_percentage' => 5,
+        ]);
+        AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+            'weight_percentage' => 5,
+        ]);
+        AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+            'weight_percentage' => 5,
+        ]);
+        AssessmentGroup::factory()->create([
+            'course_offering_id' => $offering->id,
+            'type' => 'ca',
+            'weight_percentage' => 5,
+        ]);
+
+        Livewire::test(PublicClassGrades::class, ['token' => $offering->public_grade_token])
+            ->assertSet('caWeight', 20.0);
+    }
+
     public function test_ca_totals_compute_with_group_weights(): void
     {
         $scheme = GradingScheme::factory()->create();
@@ -425,14 +458,15 @@ class PublicClassGradesTest extends TestCase
 
         $component = Livewire::test(PublicClassGrades::class, ['token' => $offering->public_grade_token])
             ->assertSet('step', 'loaded')
-            ->assertSet('caWeight', 40.0);
+            // Derived from the two groups (10 + 10), not the stale offering ca_weight.
+            ->assertSet('caWeight', 20.0);
 
         $row = $component->get('students')[0];
         // Labs group contributes 80% × 10 = 8 points; Quizzes 70% × 10 = 7 points.
-        // CA total = 15 (out of 40). Out of 100 = 37.5 → letter D.
+        // CA total = 15 (out of 20). Out of 100 = 75 → letter B.
         $this->assertEquals(15.0, $row['ca_points']);
-        $this->assertEquals(37.5, $row['ca_out_of_100']);
-        $this->assertEquals('D', $row['ca_grade']);
+        $this->assertEquals(75.0, $row['ca_out_of_100']);
+        $this->assertEquals('B', $row['ca_grade']);
     }
 
     public function test_search_shows_no_match_message(): void

@@ -96,7 +96,13 @@ class PublicClassGrades extends Component
             'gradingScheme.levels',
         ]);
 
-        $this->caWeight = (float) ($offering->ca_weight ?? 0);
+        // Derive CA weight from the sum of CA group weights (source of truth
+        // for the displayed total). Falls back to the offering's stored
+        // ca_weight if no group weights are configured.
+        $groupWeightSum = (float) $offering->assessmentGroups->sum(fn ($g) => (float) $g->weight_percentage);
+        $this->caWeight = $groupWeightSum > 0
+            ? $groupWeightSum
+            : (float) ($offering->ca_weight ?? 0);
         $scheme = $offering->gradingScheme;
 
         $this->assessmentColumns = [];

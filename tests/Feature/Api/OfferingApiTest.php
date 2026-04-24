@@ -137,6 +137,44 @@ class OfferingApiTest extends TestCase
             ->assertJsonPath('data.grades_imported', 1);
     }
 
+    public function test_public_grade_link_generate_extend_revoke(): void
+    {
+        // Generate
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/public-grade-link', [
+                'action' => 'generate',
+                'expiry_days' => 30,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.class_grades_url', fn ($url) => is_string($url) && str_contains($url, '/class-grades/'));
+
+        $this->offering->refresh();
+        $this->assertNotNull($this->offering->public_grade_token);
+
+        // Get
+        $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/public-grade-link')
+            ->assertOk()
+            ->assertJsonPath('data.active', true);
+
+        // Extend
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/public-grade-link', [
+                'action' => 'extend',
+                'expiry_days' => 7,
+            ])
+            ->assertOk();
+
+        // Revoke
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/offerings/'.$this->offering->id.'/public-grade-link', [
+                'action' => 'revoke',
+            ])
+            ->assertOk();
+
+        $this->assertNull($this->offering->fresh()->public_grade_token);
+    }
+
     public function test_appeals_endpoint_returns_appeals_with_items(): void
     {
         $student = Student::factory()->create([

@@ -72,6 +72,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/offerings/{offering}/status', [OfferingController::class, 'updateStatus']);
         Route::get('/offerings/{offering}/verification-link', [OfferingController::class, 'getVerificationLink']);
         Route::post('/offerings/{offering}/verification-link', [OfferingController::class, 'verificationLink']);
+        Route::get('/offerings/{offering}/public-grade-link', [OfferingController::class, 'getPublicGradeLink']);
+        Route::post('/offerings/{offering}/public-grade-link', [OfferingController::class, 'publicGradeLink']);
         Route::delete('/offerings/{offering}/lab-grades/{assessment}', [OfferingController::class, 'deleteLabGrades']);
         Route::get('/offerings/{offering}/grade-summary', [OfferingController::class, 'gradeSummary']);
         Route::get('/offerings/{offering}/appeals', [OfferingController::class, 'appeals']);

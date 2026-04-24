@@ -547,6 +547,80 @@ class OfferingController extends Controller
     }
 
     /**
+     * Return the current public-grade link (class list) for the offering.
+     */
+    public function getPublicGradeLink(CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('view', $offering);
+
+        if (! $offering->public_grade_token) {
+            return response()->json([
+                'data' => [
+                    'active' => false,
+                    'message' => 'No public-grade link has been generated.',
+                ],
+            ]);
+        }
+
+        $isValid = $offering->hasValidPublicGradeToken();
+
+        return response()->json([
+            'data' => [
+                'active' => $isValid,
+                'class_grades_url' => route('class.grades', ['token' => $offering->public_grade_token]),
+                'expires_at' => $offering->public_grade_token_expires_at->toIso8601String(),
+                'expired' => ! $isValid,
+            ],
+        ]);
+    }
+
+    /**
+     * Generate, extend, or revoke a public-grade link (class list) for the offering.
+     */
+    public function publicGradeLink(Request $request, CourseOffering $offering): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'action' => 'required|string|in:generate,extend,revoke',
+            'expiry_days' => 'required_if:action,generate|required_if:action,extend|nullable|integer|min:1|max:180',
+        ]);
+
+        if ($validated['action'] === 'revoke') {
+            $offering->revokePublicGradeToken();
+
+            return response()->json([
+                'data' => ['message' => 'Public-grade link revoked.'],
+            ]);
+        }
+
+        if ($validated['action'] === 'extend') {
+            if (! $offering->public_grade_token) {
+                return response()->json(['error' => 'No public-grade token exists to extend.'], 422);
+            }
+
+            $offering->extendPublicGradeToken((int) $validated['expiry_days']);
+
+            return response()->json([
+                'data' => [
+                    'class_grades_url' => route('class.grades', ['token' => $offering->public_grade_token]),
+                    'expires_at' => $offering->public_grade_token_expires_at->toIso8601String(),
+                    'message' => 'Public-grade link extended.',
+                ],
+            ]);
+        }
+
+        $offering->generatePublicGradeToken((int) $validated['expiry_days']);
+
+        return response()->json([
+            'data' => [
+                'class_grades_url' => route('class.grades', ['token' => $offering->public_grade_token]),
+                'expires_at' => $offering->public_grade_token_expires_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
      * Delete all grade results for a specific assessment in an offering.
      */
     public function deleteLabGrades(CourseOffering $offering, Assessment $assessment): JsonResponse

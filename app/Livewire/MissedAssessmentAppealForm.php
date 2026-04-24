@@ -182,7 +182,8 @@ class MissedAssessmentAppealForm extends Component
 
         $evidencePath = null;
         if ($this->evidenceFile) {
-            $evidencePath = $this->evidenceFile->store('appeal-evidence', 'local');
+            // Uses the app's default filesystem disk (local in dev, S3/R2 on prod).
+            $evidencePath = $this->evidenceFile->store('appeal-evidence');
         }
 
         DB::transaction(function () use ($offering, $picked, $evidencePath): void {

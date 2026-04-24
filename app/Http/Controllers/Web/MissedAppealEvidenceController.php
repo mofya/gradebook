@@ -16,10 +16,10 @@ class MissedAppealEvidenceController extends Controller
         abort_unless($user && ($user->isAdmin() || $user->isLecturer()), 403);
 
         abort_if(! $appeal->evidence_path, 404);
-        abort_unless(Storage::disk('local')->exists($appeal->evidence_path), 404);
+        abort_unless(Storage::exists($appeal->evidence_path), 404);
 
         $filename = basename($appeal->evidence_path);
 
-        return Storage::disk('local')->download($appeal->evidence_path, $filename);
+        return Storage::download($appeal->evidence_path, $filename);
     }
 }

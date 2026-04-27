@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/offerings/{offering}/public-grade-link', [OfferingController::class, 'getPublicGradeLink']);
         Route::post('/offerings/{offering}/public-grade-link', [OfferingController::class, 'publicGradeLink']);
         Route::delete('/offerings/{offering}/lab-grades/{assessment}', [OfferingController::class, 'deleteLabGrades']);
+        Route::delete('/offerings/{offering}/lab-grades/{assessment}/students/{identifier}', [OfferingController::class, 'clearStudentGrade']);
         Route::get('/offerings/{offering}/grade-summary', [OfferingController::class, 'gradeSummary']);
         Route::get('/offerings/{offering}/appeals', [OfferingController::class, 'appeals']);
         Route::get('/offerings/{offering}/export', [OfferingController::class, 'export']);

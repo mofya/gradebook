@@ -8,7 +8,10 @@ use App\Models\AssessmentSubsection;
 use App\Models\Course;
 use App\Models\CourseOffering;
 use App\Models\Enrollment;
+use App\Models\GradeAuditLog;
 use App\Models\GradeResult;
+use App\Models\GradingScheme;
+use App\Models\GradingSchemeLevel;
 use App\Models\MissedAssessmentAppeal;
 use App\Models\MissedAssessmentAppealItem;
 use App\Models\Semester;
@@ -17,6 +20,7 @@ use App\Models\SubsectionScore;
 use App\Models\UnmatchedLabGrade;
 use App\Models\User;
 use App\Models\Year;
+use App\Services\GradingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -836,7 +840,124 @@ class OfferingApiTest extends TestCase
             ->getJson('/api/v1/offerings/'.$this->offering->id.'/grade-summary');
 
         $response->assertOk()
-            ->assertJsonStructure(['data' => ['stats', 'distribution', 'assessment_stats']]);
+            ->assertJsonStructure(['data' => ['mode', 'stats', 'distribution', 'assessment_stats']]);
+    }
+
+    public function test_grade_summary_defaults_to_ca_mode(): void
+    {
+        $this->seedCaFixture();
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/grade-summary');
+
+        $response->assertOk()
+            ->assertJsonPath('data.mode', 'ca')
+            // Student 1: raw 80 (out of 100) → CA% = 80 → A
+            // Student 2: raw 40 → CA% = 40 → D
+            // Student 3: no grade result yet → CA% = 0 → D (but counted as pending)
+            ->assertJsonPath('data.stats.highest', 80)
+            ->assertJsonPath('data.stats.lowest', 40)
+            ->assertJsonPath('data.stats.average', 60)
+            ->assertJsonPath('data.stats.graded', 2)
+            ->assertJsonPath('data.stats.pending', 1)
+            ->assertJsonPath('data.distribution.A', 1)
+            ->assertJsonPath('data.distribution.D', 1)
+            ->assertJsonPath('data.stats.pass_count', 1)
+            ->assertJsonPath('data.stats.fail_count', 1);
+    }
+
+    public function test_grade_summary_ca_mode_explicit(): void
+    {
+        $this->seedCaFixture();
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/grade-summary?mode=ca');
+
+        $response->assertOk()
+            ->assertJsonPath('data.mode', 'ca')
+            ->assertJsonPath('data.stats.highest', 80);
+    }
+
+    public function test_grade_summary_final_mode_uses_final_total(): void
+    {
+        $this->seedCaFixture();
+
+        // Seed final_total directly on one enrollment to prove final mode reads it.
+        Enrollment::where('course_offering_id', $this->offering->id)
+            ->orderBy('id')
+            ->limit(1)
+            ->update(['final_total' => 42.5, 'final_grade' => 'D']);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/grade-summary?mode=final');
+
+        $response->assertOk()
+            ->assertJsonPath('data.mode', 'final')
+            ->assertJsonPath('data.stats.highest', 42.5);
+    }
+
+    public function test_grade_summary_invalid_mode_returns_422(): void
+    {
+        $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/v1/offerings/'.$this->offering->id.'/grade-summary?mode=bogus')
+            ->assertStatus(422);
+    }
+
+    /**
+     * Seed a simple CA fixture: grading scheme with levels, one CA group (weight 100%),
+     * one assessment (max 100), and three enrollments — two with raw scores, one without.
+     */
+    private function seedCaFixture(): void
+    {
+        $scheme = GradingScheme::factory()->create();
+
+        foreach ([
+            ['letter' => 'A', 'min_mark' => 75, 'max_mark' => 100, 'grade_points' => 4.0],
+            ['letter' => 'B', 'min_mark' => 65, 'max_mark' => 74, 'grade_points' => 3.0],
+            ['letter' => 'C', 'min_mark' => 55, 'max_mark' => 64, 'grade_points' => 2.0],
+            ['letter' => 'D', 'min_mark' => 0, 'max_mark' => 54, 'grade_points' => 0.0],
+        ] as $i => $level) {
+            GradingSchemeLevel::factory()->create([
+                'grading_scheme_id' => $scheme->id,
+                'letter' => $level['letter'],
+                'min_mark' => $level['min_mark'],
+                'max_mark' => $level['max_mark'],
+                'grade_points' => $level['grade_points'],
+                'sort_order' => $i,
+            ]);
+        }
+
+        $this->offering->update(['grading_scheme_id' => $scheme->id, 'ca_weight' => 100, 'exam_weight' => 0]);
+
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'type' => 'ca',
+            'weight_percentage' => 100,
+        ]);
+
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $this->offering->course_id,
+            'max_raw_score' => 100,
+            'weight' => 1,
+        ]);
+
+        foreach ([80, 40, null] as $rawScore) {
+            $student = Student::factory()->create();
+            $enrollment = Enrollment::factory()->create([
+                'student_id' => $student->id,
+                'course_offering_id' => $this->offering->id,
+            ]);
+
+            if ($rawScore !== null) {
+                GradeResult::factory()->create([
+                    'enrollment_id' => $enrollment->id,
+                    'assessment_id' => $assessment->id,
+                    'raw_score' => $rawScore,
+                    'is_excused' => false,
+                ]);
+            }
+        }
     }
 
     // --- Student profile endpoint ---
@@ -1026,5 +1147,271 @@ class OfferingApiTest extends TestCase
                 'expiry_days' => 5,
             ])
             ->assertStatus(422);
+    }
+
+    // --- Clear single student grade endpoint ---
+
+    public function test_clear_student_grade_deletes_grade_and_recomputes_final_total(): void
+    {
+        [$student, $enrollment, $assessment] = $this->seedClearStudentGradeFixture(rawScore: 80);
+
+        $this->assertEqualsWithDelta(80.0, (float) $enrollment->fresh()->final_total, 0.01);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/'.$student->student_id_number,
+                ['reason' => 'Mistakenly recorded — see appeal #42.']
+            );
+
+        $response->assertOk()
+            ->assertJsonPath('data.action', 'deleted')
+            ->assertJsonPath('data.student_id_number', $student->student_id_number)
+            ->assertJsonPath('data.assessment_name', $assessment->name)
+            ->assertJsonPath('data.previous_score', '80.00');
+
+        $this->assertDatabaseMissing('grade_results', [
+            'enrollment_id' => $enrollment->id,
+            'assessment_id' => $assessment->id,
+        ]);
+
+        $this->assertEqualsWithDelta(0.0, (float) $enrollment->fresh()->final_total, 0.01);
+    }
+
+    public function test_clear_student_grade_deletes_subsection_scores(): void
+    {
+        [$student, $enrollment, $assessment] = $this->seedClearStudentGradeFixture(rawScore: 80);
+
+        $gradeResult = GradeResult::where('enrollment_id', $enrollment->id)
+            ->where('assessment_id', $assessment->id)
+            ->first();
+
+        $subsection = AssessmentSubsection::factory()->create([
+            'assessment_id' => $assessment->id,
+            'name' => 'Visible Tests (%)',
+            'max_score' => 100,
+        ]);
+
+        SubsectionScore::factory()->create([
+            'grade_result_id' => $gradeResult->id,
+            'assessment_subsection_id' => $subsection->id,
+            'score' => 95,
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/'.$student->student_id_number
+            )
+            ->assertOk();
+
+        $this->assertDatabaseMissing('subsection_scores', ['grade_result_id' => $gradeResult->id]);
+    }
+
+    public function test_clear_student_grade_is_idempotent_when_no_grade_exists(): void
+    {
+        [$student, , $assessment] = $this->seedClearStudentGradeFixture(rawScore: null);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/'.$student->student_id_number
+            );
+
+        $response->assertOk()
+            ->assertJsonPath('data.action', 'no_change')
+            ->assertJsonPath('data.student_id_number', $student->student_id_number)
+            ->assertJsonPath('data.assessment_name', $assessment->name);
+    }
+
+    public function test_clear_student_grade_returns_404_when_student_not_enrolled(): void
+    {
+        [, , $assessment] = $this->seedClearStudentGradeFixture(rawScore: 80);
+
+        Student::factory()->create(['student_id_number' => 'OUTSIDE001']);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/OUTSIDE001'
+            )
+            ->assertNotFound();
+    }
+
+    public function test_clear_student_grade_returns_404_when_assessment_belongs_to_other_offering(): void
+    {
+        [$student] = $this->seedClearStudentGradeFixture(rawScore: 80);
+
+        $otherOffering = CourseOffering::factory()->create(['lecturer_id' => $this->user->id]);
+        $otherGroup = AssessmentGroup::factory()->create([
+            'course_offering_id' => $otherOffering->id,
+            'type' => 'ca',
+        ]);
+        $otherAssessment = Assessment::factory()->create([
+            'assessment_group_id' => $otherGroup->id,
+            'course_id' => $otherOffering->course_id,
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$otherAssessment->id
+                .'/students/'.$student->student_id_number
+            )
+            ->assertNotFound();
+    }
+
+    public function test_clear_student_grade_forbidden_for_non_lecturer(): void
+    {
+        [$student, , $assessment] = $this->seedClearStudentGradeFixture(rawScore: 80);
+
+        $studentUser = User::factory()->student()->create();
+
+        $this->actingAs($studentUser, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/'.$student->student_id_number
+            )
+            ->assertForbidden();
+    }
+
+    public function test_clear_student_grade_writes_audit_log(): void
+    {
+        [$student, $enrollment, $assessment] = $this->seedClearStudentGradeFixture(rawScore: 73.5);
+
+        $gradeResultId = GradeResult::where('enrollment_id', $enrollment->id)
+            ->where('assessment_id', $assessment->id)
+            ->value('id');
+
+        $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/'.$student->student_id_number,
+                ['reason' => 'Approved missed-assessment appeal.']
+            )
+            ->assertOk();
+
+        $log = GradeAuditLog::where('auditable_type', GradeResult::class)
+            ->where('auditable_id', $gradeResultId)
+            ->where('action', 'grade_cleared')
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($log, 'Audit log entry for grade_cleared was not written.');
+        $this->assertSame($this->user->id, $log->user_id);
+        $this->assertSame('Approved missed-assessment appeal.', $log->reason);
+        $this->assertSame('73.50', (string) ($log->old_values['raw_score'] ?? null));
+        $this->assertArrayHasKey('raw_score', $log->new_values);
+        $this->assertNull($log->new_values['raw_score']);
+    }
+
+    public function test_clear_student_grade_makes_assessment_appeal_eligible(): void
+    {
+        [$student, $enrollment, $assessment] = $this->seedClearStudentGradeFixture(rawScore: 0);
+
+        // Mirror MissedAssessmentAppealForm.php:244 — its filter for "already-graded" assessments.
+        $gradedBefore = GradeResult::where('enrollment_id', $enrollment->id)
+            ->whereNotNull('raw_score')
+            ->pluck('assessment_id')
+            ->all();
+
+        $this->assertContains(
+            $assessment->id,
+            $gradedBefore,
+            'Setup precondition: assessment should be marked as graded before clearing.'
+        );
+
+        $this->actingAs($this->user, 'sanctum')
+            ->deleteJson(
+                '/api/v1/offerings/'.$this->offering->id
+                .'/lab-grades/'.$assessment->id
+                .'/students/'.$student->student_id_number
+            )
+            ->assertOk();
+
+        $gradedAfter = GradeResult::where('enrollment_id', $enrollment->id)
+            ->whereNotNull('raw_score')
+            ->pluck('assessment_id')
+            ->all();
+
+        $this->assertNotContains(
+            $assessment->id,
+            $gradedAfter,
+            'After clearing, the assessment should be appeal-eligible (not in the whereNotNull(raw_score) set).'
+        );
+    }
+
+    /**
+     * Seed a minimal fixture for the clearStudentGrade endpoint:
+     * one enrolled student, one CA group with weight 100%, one assessment, optional grade result.
+     *
+     * @return array{0: Student, 1: Enrollment, 2: Assessment}
+     */
+    private function seedClearStudentGradeFixture(?float $rawScore): array
+    {
+        $scheme = GradingScheme::factory()->create();
+
+        foreach ([
+            ['letter' => 'A', 'min_mark' => 75, 'max_mark' => 100, 'grade_points' => 4.0],
+            ['letter' => 'B', 'min_mark' => 65, 'max_mark' => 74, 'grade_points' => 3.0],
+            ['letter' => 'D', 'min_mark' => 0, 'max_mark' => 64, 'grade_points' => 0.0],
+        ] as $i => $level) {
+            GradingSchemeLevel::factory()->create([
+                'grading_scheme_id' => $scheme->id,
+                'letter' => $level['letter'],
+                'min_mark' => $level['min_mark'],
+                'max_mark' => $level['max_mark'],
+                'grade_points' => $level['grade_points'],
+                'sort_order' => $i,
+            ]);
+        }
+
+        $this->offering->update([
+            'grading_scheme_id' => $scheme->id,
+            'ca_weight' => 100,
+            'exam_weight' => 0,
+        ]);
+
+        $group = AssessmentGroup::factory()->create([
+            'course_offering_id' => $this->offering->id,
+            'type' => 'ca',
+            'weight_percentage' => 100,
+        ]);
+
+        $assessment = Assessment::factory()->create([
+            'assessment_group_id' => $group->id,
+            'course_id' => $this->offering->course_id,
+            'name' => 'Lab 03',
+            'max_raw_score' => 100,
+            'weight' => 1,
+        ]);
+
+        $student = Student::factory()->create([
+            'student_id_number' => 'CLR'.fake()->unique()->numerify('######'),
+        ]);
+        $enrollment = Enrollment::factory()->create([
+            'student_id' => $student->id,
+            'course_offering_id' => $this->offering->id,
+        ]);
+
+        if ($rawScore !== null) {
+            GradeResult::factory()->create([
+                'enrollment_id' => $enrollment->id,
+                'assessment_id' => $assessment->id,
+                'raw_score' => $rawScore,
+                'is_excused' => false,
+            ]);
+
+            // Pre-compute the enrollment's final_total so we can assert recompute happens.
+            app(GradingService::class)->resolveGrade($enrollment);
+        }
+
+        return [$student, $enrollment->fresh(), $assessment];
     }
 }

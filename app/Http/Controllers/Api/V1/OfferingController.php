@@ -660,6 +660,98 @@ class OfferingController extends Controller
     }
 
     /**
+     * Clear a single student's grade for a single assessment in an offering.
+     *
+     * Used by the missed-assessment appeal flow: a student with a recorded zero
+     * (or any score) cannot submit an appeal because the form filters by
+     * GradeResult::whereNotNull('raw_score'). Deleting the row makes the
+     * assessment appeal-eligible again. Idempotent.
+     */
+    public function clearStudentGrade(Request $request, CourseOffering $offering, Assessment $assessment, string $identifier): JsonResponse
+    {
+        $this->authorize('update', $offering);
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        $belongsToOffering = $assessment->assessmentGroup
+            && $assessment->assessmentGroup->course_offering_id === $offering->id;
+
+        if (! $belongsToOffering) {
+            return response()->json(['error' => 'Assessment does not belong to this offering.'], 404);
+        }
+
+        $student = Student::where('student_id_number', $identifier)->first()
+            ?? Student::whereRaw('LOWER(github_username) = ?', [strtolower($identifier)])->first();
+
+        if (! $student) {
+            return response()->json(['error' => "Student not found: {$identifier}"], 404);
+        }
+
+        $enrollment = Enrollment::where('student_id', $student->id)
+            ->where('course_offering_id', $offering->id)
+            ->first();
+
+        if (! $enrollment) {
+            return response()->json([
+                'error' => "Student {$identifier} is not enrolled in this offering.",
+            ], 404);
+        }
+
+        $gradeResult = GradeResult::where('enrollment_id', $enrollment->id)
+            ->where('assessment_id', $assessment->id)
+            ->first();
+
+        if (! $gradeResult) {
+            return response()->json([
+                'data' => [
+                    'action' => 'no_change',
+                    'student_id_number' => $student->student_id_number,
+                    'assessment_name' => $assessment->name,
+                    'previous_score' => null,
+                ],
+            ]);
+        }
+
+        $previousScore = $gradeResult->raw_score;
+        $gradeResultId = $gradeResult->id;
+        $oldValues = [
+            'raw_score' => $previousScore,
+            'normalized_score' => $gradeResult->normalized_score,
+            'is_excused' => $gradeResult->is_excused,
+        ];
+
+        SubsectionScore::where('grade_result_id', $gradeResult->id)->delete();
+        $gradeResult->delete();
+
+        app(GradingService::class)->resolveGrade($enrollment);
+
+        GradeAuditLog::create([
+            'auditable_type' => GradeResult::class,
+            'auditable_id' => $gradeResultId,
+            'user_id' => auth()->id(),
+            'action' => 'grade_cleared',
+            'old_values' => $oldValues,
+            'new_values' => [
+                'raw_score' => null,
+                'normalized_score' => null,
+            ],
+            'reason' => $validated['reason'] ?? null,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'data' => [
+                'action' => 'deleted',
+                'student_id_number' => $student->student_id_number,
+                'assessment_name' => $assessment->name,
+                'previous_score' => $previousScore,
+            ],
+        ]);
+    }
+
+    /**
      * Update a student's details (GitHub username, personal email) within an offering.
      */
     public function updateEnrollment(Request $request, CourseOffering $offering, string $identifier): JsonResponse
@@ -777,14 +869,21 @@ class OfferingController extends Controller
     /**
      * Return aggregated grade statistics for an offering.
      */
-    public function gradeSummary(CourseOffering $offering): JsonResponse
+    public function gradeSummary(Request $request, CourseOffering $offering): JsonResponse
     {
         $this->authorize('view', $offering);
 
-        $report = app(ReportingService::class)->generateOfferingReport($offering);
+        $validated = $request->validate([
+            'mode' => 'sometimes|string|in:ca,final',
+        ]);
+
+        $mode = $validated['mode'] ?? 'ca';
+
+        $report = app(ReportingService::class)->generateOfferingReport($offering, $mode);
 
         return response()->json([
             'data' => [
+                'mode' => $report['mode'],
                 'stats' => $report['stats'],
                 'distribution' => $report['distribution'],
                 'assessment_stats' => $report['assessment_stats'] ?? [],
